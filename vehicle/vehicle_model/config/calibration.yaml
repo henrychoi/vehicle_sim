@@ -5,13 +5,6 @@ base_link2camera:
   roll: 0.0
   pitch: 0.0
   yaw: 0.0
-base_link2velodyne:
-  x: 0.0
-  y: 0.0
-  z: 2.0
-  roll: 0.0
-  pitch: 0.0
-  yaw: 0.0
 base_link2imu:
   x: 0.0
   y: 0.0

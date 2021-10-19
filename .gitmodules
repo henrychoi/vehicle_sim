@@ -1,6 +1,3 @@
-[submodule "vehicle/sensor_model/velodyne"]
-	path = vehicle/sensor_model/velodyne
-	url = https://bitbucket.org/DataspeedInc/velodyne_simulator.git
 [submodule "worlds/external/osrf_citysim"]
 	path = worlds/external/osrf_citysim
 	url = https://github.com/yukkysaito/osrf_citysim.git

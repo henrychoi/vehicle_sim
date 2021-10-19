@@ -26,7 +26,7 @@
           <mesh filename="package://vehicle_model/mesh/body.dae" scale="${wheel_base/2.85} 1 1"/>
         </geometry>
         <material name="black">
-            <color rgba="0.1 0.1 0.1 0.5"/>
+            <color rgba="${25/255} ${25/255} ${25/255} .9"/>
         </material>
       </visual>
       <collision>

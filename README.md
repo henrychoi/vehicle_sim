@@ -1,7 +1,6 @@
 # Overview
 Autonomous driving car simulator based on gazebo.
 The following sensors are simulated.
-- velodyne (VLP-16, HDL-32E)
 - camera
 - imu
 ![screenshot from 2019-01-11 00-42-10-min](https://user-images.githubusercontent.com/8327598/50984661-bed3f780-1545-11e9-9af6-071ddd1cec76.png)
@@ -26,13 +25,6 @@ $ rosdep install --from-paths <vehicle_sim path> -y
 $ cakin_make
 $ source "your catkin workspace"/devel/setup.bash
 ```
-
-2. upgrade gazebo version and download gazebo models(**only once**)
-   -  reason : https://bitbucket.org/DataspeedInc/velodyne_simulator/src/56d11e899ce0a198e7206298b3aaaf8004f3a2c6/gazebo_upgrade.md?fileviewer=file-view-default
-```
-$ rosrun vehicle_sim_launcher setup.sh
-```
-
 3. launch gazebo
 
 ```shell
