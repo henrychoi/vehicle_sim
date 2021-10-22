@@ -8,7 +8,7 @@
   <arg name="rvizconfig" default="$(find urdf_tutorial)/rviz/urdf.rviz" />
 
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
-    <arg name="world_name" default="$(find gazebo_world_description)/worlds/autoware.world"/> 
+    <arg name="world_name" default="$(find gazebo_world_description)/worlds/road.world"/> 
     <arg name="paused" value="false"/>
     <arg name="use_sim_time" value="true"/>
     <arg name="gui" value="true"/>
@@ -32,6 +32,7 @@
     <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
 
     <rosparam file="$(find vehicle_model)/config/vehicle_info.yaml" command="load"/>
+
     <node name="vehicle_input_subscriber" pkg="vehicle_sim_interface" type="vehicle_input_subscriber" respawn="false"
           output="screen">
       <remap from="cmd_vel" to="/cmd_vel"/>
