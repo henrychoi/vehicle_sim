@@ -48,6 +48,90 @@
         <pose>0 0 30 0 1.5 0</pose>
       </camera>
     </gui>
+  
+    <model name="column1">
+      <pose>-5 -5 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>.5 .5 3</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>.5 .5 3</size>
+            </box>
+          </geometry>
+        </visual>
+      </link>
+      <static>true</static>
+    </model>
+
+    <model name="column2">
+      <pose>-5 5 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>.5 .5 3</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>.5 .5 3</size>
+            </box>
+          </geometry>
+        </visual>
+      </link>
+      <static>true</static>
+    </model>
+
+    <model name="column3">
+      <pose>5 -5 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>.5 .5 3</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>.5 .5 3</size>
+            </box>
+          </geometry>
+        </visual>
+      </link>
+      <static>true</static>
+    </model>
+
+    <model name="column4">
+      <pose>5 5 0.5 0 0 0</pose>
+      <link name="link">
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>.5 .5 3</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>.5 .5 3</size>
+            </box>
+          </geometry>
+        </visual>
+      </link>
+      <static>true</static>
+    </model>
 
   </world>
 </sdf>
