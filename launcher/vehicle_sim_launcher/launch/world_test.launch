@@ -8,7 +8,7 @@
   <arg name="rvizconfig" default="$(find urdf_tutorial)/rviz/urdf.rviz" />
 
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
-    <arg name="world_name" default="$(find gazebo_world_description)/worlds/road.world"/> 
+    <arg name="world_name" default="$(find gazebo_world_description)/worlds/KUEparking.world"/> 
     <arg name="paused" value="false"/>
     <arg name="use_sim_time" value="true"/>
     <arg name="gui" value="true"/>
@@ -43,4 +43,20 @@
     </node>
   </group>
 
+  <node name="maruco_fl" pkg="maruco" type="maruco" args="maruco_fl" required="true" output="screen">
+    <remap from="/maruco_fl/image_raw" to="/cam_fl/image_raw"/>
+    <remap from="/maruco_fl/camera_info" to="/cam_fl/camera_info"/>
+
+    <!--Detector-->
+    <param name="debug" value="true"/>
+    <param name="cosine_limit" value="0.7"/>
+    <param name="theshold_block_size_min" value="3"/>
+    <param name="theshold_block_size_max" value="21"/>
+    <param name="max_error_quad" value="0.035"/>
+    <param name="min_area" value="100"/>
+
+    <!--Markers SIZE_CM POS_XYZ ROT_XYZ-->
+    <param name="marker0" value="0.2_0_0_0_0_0_0"/>
+    <param name="marker1" value="0.2_0_0_0_0_0_0"/>    
+  </node>
 </launch>

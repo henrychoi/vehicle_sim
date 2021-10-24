@@ -51,16 +51,17 @@
   <!-- gazebo -->
  	<xacro:include filename="$(find vehicle_model)/urdf/vehicle.gazebo"/>
 
-  <!-- ================ sensor ================ -->
+  <!-- ================ sensor to base_link xforms ================ -->
 	<xacro:property name="calibration" value="${load_yaml('$(find vehicle_model)/config/calibration.yaml')}"/>
-  <xacro:monocular_camera_macro suffix="camera" parent="base_link" namespace="" 
+
+  <xacro:monocular_camera_macro suffix="cam_fl" parent="base_link" namespace="cam_fl" 
                                 x="${calibration['base_link2camera']['x']}"
                                 y="${calibration['base_link2camera']['y']}"
                                 z="${calibration['base_link2camera']['z']}"
                                 roll="${calibration['base_link2camera']['roll']}"
                                 pitch="${calibration['base_link2camera']['pitch']}"
                                 yaw="${calibration['base_link2camera']['yaw']}"
-                                fps="30" width="800" height="400" fov="1.3"/>
+                                fps="6" width="1280" height="720" fov="1.6"/>
   <xacro:imu_macro suffix="imu" parent="base_link" namespace=""
                    x="${calibration['base_link2imu']['x']}"
                    y="${calibration['base_link2imu']['y']}"
