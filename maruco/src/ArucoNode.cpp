@@ -3,25 +3,17 @@
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
-// #include <opencv2/photo/photo.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
 
 #include <ros/ros.h>
 #include <ros/console.h>
-#include <std_msgs/String.h> //#include <std_msgs/msg/string.hpp>
-#include <std_msgs/Bool.h>
+#include <std_msgs/String.h>
 #include <std_msgs/Int32.h>
 
-#include <geometry_msgs/Point.h>
-#include <geometry_msgs/PoseStamped.h>
 #include <sensor_msgs/image_encodings.h>
-#include <image_transport/image_transport.h>//#include <sensor_msgs/image.h>
-#include <nav_msgs/Odometry.h>
-
 #include <image_transport/image_transport.h>
+#include <tf/transform_broadcaster.h>
 #include <cv_bridge/cv_bridge.h>
-
-#include <maruco/Marker.h>
 
 #include "ArucoMarker.cpp"
 #include "ArucoMarkerInfo.cpp"
@@ -30,107 +22,86 @@
 using namespace cv;
 using namespace std;
 
-/**
- * Camera calibration matrix pre initialized with calibration values for the test camera.
- */
-double data_calibration[9] = {640, 0, 360, 0, 640, 360, 0, 0, 1};
-Mat calibration = cv::Mat(3, 3, CV_64F, data_calibration);
+class MarucoPublisher {
+public:
+	MarucoPublisher(const char* suffix);
 
-/**
- * Lenses distortion matrix initialized with values for the test camera.
- */
-double data_distortion[5] = {0, 0, 0, 0, 0};
-Mat distortion = cv::Mat(1, 5, CV_64F, data_distortion);
+private:
+	void onFrame(const sensor_msgs::ImageConstPtr& msg);
+	void onCameraInfo(const sensor_msgs::CameraInfo &msg);
 
-/**
- * List of known of markers, to get the absolute position and rotation of the camera, some of these are required.
- */
-vector<ArucoMarkerInfo> known = vector<ArucoMarkerInfo>();
+    ros::NodeHandle _nh;
+	string link_name = "maruco_";
 
-/**
- * Node visibility publisher.
- * Publishes true when a known marker is visible, publishes false otherwise.
- */
-ros::Publisher pub_visible;
+	/**
+	 * Camera calibration matrix pre initialized with calibration values for the test camera.
+	 */
+	double data_calibration[9] = {640, 0, 360, 0, 640, 360, 0, 0, 1};
+	Mat calibration = cv::Mat(3, 3, CV_64F, data_calibration);
 
-/**
- * Node position publisher.
- */
-ros::Publisher pub_position;
+	/**
+	 * Lenses distortion matrix initialized with values for the test camera.
+	 */
+	double data_distortion[5] = {0, 0, 0, 0, 0};
+	Mat distortion = cv::Mat(1, 5, CV_64F, data_distortion);
 
-/**
- * Node rotation publisher.
- */
-ros::Publisher pub_rotation;
+	/**
+	 * List of known of markers, to get the absolute position and rotation of the camera, some of these are required.
+	 */
+	vector<ArucoMarkerInfo> known = vector<ArucoMarkerInfo>();
 
-/**
- * Node pose publisher.
- */
-ros::Publisher pub_pose;
+	image_transport::ImageTransport _it;
+	tf::TransformBroadcaster broadcaster;
+	image_transport::Publisher pub_debug_img;
+	image_transport::Subscriber sub_camera;
+	ros::Subscriber sub_camera_info;
 
-/**
- * Node odometry publisher.
- * Publishes the odometry of the tf_frame indicated using the pose calculated from marker.
- */
-ros::Publisher pub_odom;
+	/**
+	 * Flag to check if calibration parameters were received.
+	 * If set to false the camera will be calibrated when a camera info message is received.
+	 */
+	bool calibrated;
 
-image_transport::Publisher pub_debug_img;
+	bool debug;
 
-/**
- * Name of the transform tf name to indicate on published topics.
- */
-string tf_frame_id;
+	/**
+	 * Cosine limit used during the quad detection phase.
+	 * Value between 0 and 1.
+	 * By default 0.8 is used.
+	 * The bigger the value more distortion tolerant the square detection will be.
+	 */
+	float cosine_limit;
 
-/**
- * Pose publisher sequence counter.
- */
-int pub_pose_seq = 0;
+	/**
+	 * Maximum error to be used by geometry poly aproximation method in the quad detection phase.
+	 * By default 0.035 is used.
+	 */
+	float max_error_quad;
 
-/**
- * Flag to check if calibration parameters were received.
- * If set to false the camera will be calibrated when a camera info message is received.
- */
-bool calibrated;
+	/**
+	 * Adaptive theshold pre processing block size.
+	 */
+	int theshold_block_size;
 
-bool debug;
+	/**
+	 * Minimum threshold block size.
+	 * By default 5 is used.
+	 */
+	int theshold_block_size_min;
 
-/**
- * Cosine limit used during the quad detection phase.
- * Value between 0 and 1.
- * By default 0.8 is used.
- * The bigger the value more distortion tolerant the square detection will be.
- */
-float cosine_limit;
+	/**
+	 * Maximum threshold block size.
+	 * By default 9 is used.
+	 */
+	int theshold_block_size_max;
 
-/**
- * Maximum error to be used by geometry poly aproximation method in the quad detection phase.
- * By default 0.035 is used.
- */
-float max_error_quad;
-
-/**
- * Adaptive theshold pre processing block size.
- */
-int theshold_block_size;
-
-/**
- * Minimum threshold block size.
- * By default 5 is used.
- */
-int theshold_block_size_min;
-
-/**
- * Maximum threshold block size.
- * By default 9 is used.
- */
-int theshold_block_size_max;
-
-/**
- * Minimum area considered for aruco markers.
- * Should be a value high enough to filter blobs out but detect the smallest marker necessary.
- * By default 100 is used.
- */
-int min_area;
+	/**
+	 * Minimum area considered for aruco markers.
+	 * Should be a value high enough to filter blobs out but detect the smallest marker necessary.
+	 * By default 100 is used.
+	 */
+	int min_area;
+};
 
 /**
  * Draw yellow text with black outline into a frame.
@@ -181,11 +152,9 @@ static void convert_frame_to_message(const cv::Mat& frame,
  * Callback executed every time a new camera frame is received.
  * This callback is used to process received images and publish messages with camera position data if any.
  */
-void onFrame(const sensor_msgs::ImageConstPtr& msg)
-{
-	// ROS_INFO("onFrame %u.%09u", msg->header.stamp.sec, msg->header.stamp.nsec);
-	try
-	{
+void MarucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
+	// ROS_INFO("onFrame");// %u.%09u", msg->header.stamp.sec, msg->header.stamp.nsec);
+	try {
 		Mat frame = cv_bridge::toCvShare(msg, "bgr8")->image;
 
 		//Process image and get markers
@@ -210,11 +179,8 @@ void onFrame(const sensor_msgs::ImageConstPtr& msg)
 
 		//Check known markers and build known of points
 		for(unsigned int i = 0; i < markers.size(); i++)
-		{
 			for(unsigned int j = 0; j < known.size(); j++)
-			{
-				if(markers[i].id == known[j].id)
-				{
+				if(markers[i].id == known[j].id) {
 					markers[i].attachInfo(known[j]);
 					
 					for(unsigned int k = 0; k < 4; k++)
@@ -225,112 +191,91 @@ void onFrame(const sensor_msgs::ImageConstPtr& msg)
 
 					found.push_back(markers[i]);
 				}
-			}
-		}
 
 		//Draw markers
-		if(debug)
-		{
+		if(debug) {
 			ArucoDetector::drawMarkers(frame, markers, calibration, distortion);
 		}
 
 		//Check if any marker was found
-		if(world.size() > 0)
-		{
-			//Calculate position and rotation
-			Mat rotation, position;
-
-			#if CV_MAJOR_VERSION == 2
-				solvePnP(world, projected, calibration, distortion, rotation, position, false, ITERATIVE);
-			#else
-				solvePnP(world, projected, calibration, distortion, rotation, position, false, SOLVEPNP_ITERATIVE);
-			#endif
-
-			//Invert position and rotation to get camera coords
-			Mat rodrigues;
-			Rodrigues(rotation, rodrigues);
-			
-			Mat camera_rotation;
-			Rodrigues(rodrigues.t(), camera_rotation);
-			
-			Mat camera_position = -rodrigues.t() * position;
-
-			//Publish position and rotation
-			geometry_msgs::Point message_position, message_rotation;
-
-			//Robot coordinates
-			message_position.x = camera_position.at<double>(2, 0);
-			message_position.y = -camera_position.at<double>(0, 0);
-			message_position.z = -camera_position.at<double>(1, 0);
-			
-			message_rotation.x = camera_rotation.at<double>(2, 0);
-			message_rotation.y = -camera_rotation.at<double>(0, 0);
-			message_rotation.z = -camera_rotation.at<double>(1, 0);
-
-			pub_position.publish(message_position);
-			pub_rotation.publish(message_rotation);
-
-			//Publish pose
-			geometry_msgs::PoseStamped message_pose;
-
-			//Header
-			message_pose.header.frame_id = tf_frame_id;
-			message_pose.header.seq = pub_pose_seq++;
-			message_pose.header.stamp = ros::Time::now();
-
-			//Position
-			message_pose.pose.position.x = message_position.x;
-			message_pose.pose.position.y = message_position.y;
-			message_pose.pose.position.z = message_position.z;
-
-			//Convert to quaternion
-			double x = message_rotation.x;
-			double y = message_rotation.y;
-			double z = message_rotation.z;
-
-			//Module of angular velocity
-			double angle = sqrt(x*x + y*y + z*z);
-			if(angle > 0.0)
-			{
-				auto sa = sin(angle/2.0);
-				message_pose.pose.orientation.x = x * sa/angle;
-				message_pose.pose.orientation.y = y * sa/angle;
-				message_pose.pose.orientation.z = z * sa/angle;
-				message_pose.pose.orientation.w = cos(angle/2.0);
-			}
-			//To avoid illegal expressions
-			else
-			{
-				message_pose.pose.orientation.x = 0.0;
-				message_pose.pose.orientation.y = 0.0;
-				message_pose.pose.orientation.z = 0.0;
-				message_pose.pose.orientation.w = 1.0;
-			}
-			
-			pub_pose.publish(message_pose);
-
-            nav_msgs::Odometry message_odometry;
-            message_odometry.header.frame_id = tf_frame_id;
-            message_odometry.header.stamp = ros::Time::now();
-            message_odometry.pose.pose = message_pose.pose;
-            pub_odom.publish(message_odometry);
-
-			if(debug) {
-				ArucoDetector::drawOrigin(frame, found, calibration, distortion, 0.1);
-				auto img = boost::make_shared<sensor_msgs::Image>();
-				convert_frame_to_message(frame, img);
-				img->header.stamp = msg->header.stamp; // preserve the timestamp
-				pub_debug_img.publish(img);
-			}
+		if(!world.size()) {
+			auto img = boost::make_shared<sensor_msgs::Image>();
+			convert_frame_to_message(frame, img);
+			img->header.stamp = msg->header.stamp; // preserve the timestamp
+			pub_debug_img.publish(img); //throw up the debug img
+			return; // and bail
 		}
 
-		//Publish visible
-		std_msgs::Bool message_visible;
-		message_visible.data = world.size() != 0;
-		pub_visible.publish(message_visible);
-	}
-	catch(cv_bridge::Exception& e)
-	{
+		// Calculate position and rotation from CV PNP
+		Mat rotation, position;
+		#if CV_MAJOR_VERSION == 2
+			solvePnP(world, projected, calibration, distortion, rotation, position, false, ITERATIVE);
+		#else
+			solvePnP(world, projected, calibration, distortion, rotation, position, false, SOLVEPNP_ITERATIVE);
+		#endif
+
+		//Invert position and rotation to get camera coords
+		Mat rodrigues;
+		Rodrigues(rotation, rodrigues);
+		
+		Mat camera_rotation;
+		Rodrigues(rodrigues.t(), camera_rotation);
+		
+		Mat camera_position = -rodrigues.t() * position;
+
+		/* Publish TF note the flipping from CV --> ROS
+			Units should be in meters and radians. The OpenCV uses
+			Z+ to represent depth, Y- for height and X+ for lateral, but ROS uses X+ for depth (axial), Z+ for height, and
+			Y- for lateral movement.
+		*           ROS          |          OpenCV
+		*    Z+                  |    Y- 
+		*    |                   |    |
+		*    |    X+             |    |    Z+
+		*    |    /              |    |    /
+		*    |   /               |    |   /
+		*    |  /                |    |  /
+		*    | /                 |    | /
+		*    |/                  |    |/
+		*    O-------------> Y-  |    O-------------> X+
+		 */
+		tf::Transform transform;
+		transform.setOrigin(tf::Vector3(
+			camera_position.at<double>(2, 0) // CV Z
+			, -camera_position.at<double>(0, 0) // -CV X
+			, -camera_position.at<double>(1, 0) // -CV Y
+			) ); 
+		tf::Quaternion q;
+		// geometry_msgs::Point message_position, message_rotation;
+		// Convert Euler angles to quaternion
+		double ex = camera_rotation.at<double>(2, 0)
+			, ey = -camera_rotation.at<double>(0, 0)
+			, ez = -camera_rotation.at<double>(1, 0)
+			, angle = sqrt(ex*ex + ey*ey + ez*ez);
+		if(angle > 0.0) {
+			auto sa = sin(angle/2.0);
+			q[0] = ex * sa/angle;
+			q[1] = ey * sa/angle;
+			q[2] = ez * sa/angle;
+			q[3] = cos(angle/2.0);
+		} else { //To avoid illegal expressions
+			ROS_ERROR("Failed to convert Euler(%.2f,%.2f,%.2f) --> quat"
+			 	, ex, ey, ez);
+			q[0] = q[1] = q[2] = 0.0;
+			q[3] = 1.0;
+		}
+		transform.setRotation(q);
+		broadcaster.sendTransform(tf::StampedTransform(transform
+			, msg->header.stamp, "base_link", link_name));
+
+		if(debug) {
+			ArucoDetector::drawOrigin(frame, found, calibration, distortion, 0.1);
+			auto img = boost::make_shared<sensor_msgs::Image>();
+			convert_frame_to_message(frame, img);
+			// preserve the timestamp from the image frame
+			img->header.stamp = msg->header.stamp;
+			pub_debug_img.publish(img);
+		}
+	} catch(cv_bridge::Exception& e) {
 		ROS_ERROR("Error getting image data");
 	}
 }
@@ -339,28 +284,20 @@ void onFrame(const sensor_msgs::ImageConstPtr& msg)
  * On camera info callback.
  * Used to receive camera calibration parameters.
  */
-void onCameraInfo(const sensor_msgs::CameraInfo &msg)
-{
-	if(!calibrated)
-	{
-		calibrated = true;
-		
-		for(unsigned int i = 0; i < 9; i++)
-		{
-			calibration.at<double>(i / 3, i % 3) = msg.K[i];
-		}
-		
-		for(unsigned int i = 0; i < 5; i++)
-		{
-			distortion.at<double>(0, i) = msg.D[i];
-		}
+void MarucoPublisher::onCameraInfo(const sensor_msgs::CameraInfo &msg) {
+	if(calibrated) return;
+	calibrated = true;
+	
+	for(unsigned int i = 0; i < 9; i++)
+		calibration.at<double>(i / 3, i % 3) = msg.K[i];
+	
+	for(unsigned int i = 0; i < 5; i++)
+		distortion.at<double>(0, i) = msg.D[i];
 
-		if(debug)
-		{
-			cout << "Camera calibration param received" << endl;
-			cout << "Camera: " << calibration << endl;
-			cout << "Distortion: " << distortion << endl;
-		}
+	if(debug) {
+		cout << "Camera calibration param received" << endl;
+		cout << "Camera: " << calibration << endl;
+		cout << "Distortion: " << distortion << endl;
 	}
 }
 
@@ -386,60 +323,34 @@ void stringToDoubleArray(string data, double* values, unsigned int count, string
 	}
 }
 
-/**
- * Main method launches aruco ros node, the node gets image and calibration parameters from camera, and publishes position and rotation of the camera relative to the markers.
- * Units should be in meters and radians, the markers are described by a position and an euler rotation.
- * Position is also available as a pose message that should be easier to consume by other ROS nodes.
- * Its possible to pass markers as arugment to this node or register and remove them during runtime using another ROS node.
- * The coordinate system used by OpenCV uses Z+ to represent depth, Y- for height and X+ for lateral, but for the node the coordinate system used is diferent X+ for depth, Z+ for height and Y- for lateral movement.
- * The coordinates are converted on input and on output, its possible to force the OpenCV coordinate system by setting the use_opencv_coords param to true.
- *   
- *           ROS          |          OpenCV
- *    Z+                  |    Y- 
- *    |                   |    |
- *    |    X+             |    |    Z+
- *    |    /              |    |    /
- *    |   /               |    |   /
- *    |  /                |    |  /
- *    | /                 |    | /
- *    |/                  |    |/
- *    O-------------> Y-  |    O-------------> X+
- *
- * @param argc Number of arguments.
- * @param argv Value of the arguments.
- */
-int main(int argc, char **argv)
+MarucoPublisher::MarucoPublisher(const char* suffix)
+: _nh("")
+, _it(_nh)
+, pub_debug_img(_it.advertise(string("maruco_")+suffix+"/debug", 1))
+, sub_camera(_it.subscribe(string("cam_") + suffix + "/image_raw"
+	, 1, &MarucoPublisher::onFrame, this))
+, sub_camera_info(_nh.subscribe(string("cam_") + suffix + "/camera_info"
+	, 1 , &MarucoPublisher::onCameraInfo, this))
 {
-	if (argc < 2) {
-		ROS_FATAL("node name required");
-		return -1;
-	}
-	ros::init(argc, argv, argv[1]);
+	link_name += suffix;
 
-	//ROS node instance
-	ros::NodeHandle node(argv[1]);
-	
-	//Parameters
-	node.param<bool>("debug", debug, false);
-	node.param<float>("cosine_limit", cosine_limit, 0.7);
-	node.param<int>("theshold_block_size_min", theshold_block_size_min, 3);
-	node.param<int>("theshold_block_size_max", theshold_block_size_max, 21);
-	node.param<float>("max_error_quad", max_error_quad, 0.035); 
-	node.param<int>("min_area", min_area, 100);
-	node.param<bool>("calibrated", calibrated, false);
+	_nh.param<bool>("debug", debug, false);
+	_nh.param<float>("cosine_limit", cosine_limit, 0.7);
+	_nh.param<int>("theshold_block_size_min", theshold_block_size_min, 3);
+	_nh.param<int>("theshold_block_size_max", theshold_block_size_max, 21);
+	_nh.param<float>("max_error_quad", max_error_quad, 0.035); 
+	_nh.param<int>("min_area", min_area, 100);
+	_nh.param<bool>("calibrated", calibrated, false);
 
 	//Initial threshold block size
 	theshold_block_size = (theshold_block_size_min + theshold_block_size_max) / 2;
 	if(theshold_block_size % 2 == 0)
-	{
 		theshold_block_size++;
-	}
 
 	//Camera instrinsic calibration parameters
-	if(node.hasParam("calibration"))
-	{
+	if(_nh.hasParam("calibration")) {
 		string data;
-		node.param<string>("calibration", data, "");
+		_nh.param<string>("calibration", data, "");
 		
 		double values[9];
 		stringToDoubleArray(data, values, 9, "_");
@@ -448,15 +359,14 @@ int main(int argc, char **argv)
 		{
 			calibration.at<double>(i / 3, i % 3) = values[i];
 		}
-
-		calibrated = true;
 	}
+
 #if 0
 	//Camera distortion calibration parameters
-	if(node.hasParam("distortion"))
+	if(_nh.hasParam("distortion"))
 	{
 		string data;
-		node.param<string>("distortion", data, "");	
+		_nh.param<string>("distortion", data, "");	
 
 		double values[5];
 		stringToDoubleArray(data, values, 5, "_");
@@ -472,9 +382,9 @@ int main(int argc, char **argv)
 
 	//Aruco makers passed as parameters
 	for(unsigned int i = 0; i < 2; i++) {
-		if(node.hasParam("marker" + to_string(i))) {
+		if(_nh.hasParam("marker" + to_string(i))) {
 			string data;
-			node.param<string>("marker" + to_string(i), data, "1_0_0_0_0_0_0");
+			_nh.param<string>("marker" + to_string(i), data, "1_0_0_0_0_0_0");
 
 			double values[7];
 			stringToDoubleArray(data, values, 7, "_");
@@ -488,22 +398,16 @@ int main(int argc, char **argv)
 		for(unsigned int i = 0; i < known.size(); i++)
 			known[i].print();
 	}
+}
 
-    // TF frame
-    node.param<string>("tf_frame_id", tf_frame_id, "robot");
-
-	image_transport::ImageTransport it(node);
-
-	pub_visible = node.advertise<std_msgs::Bool>("visible", 10);
-	pub_position = node.advertise<geometry_msgs::Point>("position", 10);
-	pub_rotation = node.advertise<geometry_msgs::Point>("rotation", 10);
-	pub_pose = node.advertise<geometry_msgs::PoseStamped>("pose", 10);
-    pub_odom = node.advertise<nav_msgs::Odometry>("odom", 10);
-    pub_debug_img = it.advertise("debug", 1);
-
-	image_transport::Subscriber sub_camera = it.subscribe("image_raw", 1, onFrame);
-	ros::Subscriber sub_camera_info = node.subscribe("camera_info", 1, onCameraInfo);
-
+int main(int argc, char **argv) {
+	if (argc < 2) {
+		fprintf(stderr, "maruco camera location {fl, fr, rl, rr} required");
+		return -1;
+	}
+	argc = 0;
+	ros::init(argc, NULL, string("maruco_") + argv[1]);
+	MarucoPublisher pub(argv[1]);
 	ros::spin();
 
 	return 0;

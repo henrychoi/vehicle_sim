@@ -5,19 +5,15 @@ add_compile_options(-std=c++11)
 
 #Packages
 find_package(catkin REQUIRED COMPONENTS	
-	cv_bridge roscpp std_msgs message_generation image_transport
+	tf cv_bridge roscpp std_msgs image_transport
 )
 find_package(OpenCV REQUIRED)
 
-add_message_files(FILES Marker.msg)
-generate_messages(DEPENDENCIES std_msgs)
-
 #Catkin dependencies
-catkin_package(CATKIN_DEPENDS message_runtime roscpp std_msgs)
+catkin_package(CATKIN_DEPENDS tf roscpp std_msgs)
 
 #Aruco ROS node
 add_executable(maruco src/ArucoNode.cpp)
-add_dependencies(maruco aruco_generate_messages_cpp ${catkin_EXPORTED_TARGETS})
 target_link_libraries(maruco ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
 include_directories(include ${catkin_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
