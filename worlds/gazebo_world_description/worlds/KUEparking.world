@@ -22,32 +22,26 @@
       <uri>model://ground_plane</uri>
     </include>
 
-    <!-- model name="ground">
+    <model name="ceiling">
+      <pose>0 0 3.1 0 0 0</pose>
       <link name="body">
-        <collision name="geom">
+        <visual name="visual">
           <geometry>
             <plane>
               <normal>0 0 1</normal>
+              <size>50 50</size>
             </plane>
           </geometry>
-          <surface>
-            <friction>
-              <ode>
-                <mu>100</mu>
-                <mu2>50</mu2>
-              </ode>
-            </friction>
-          </surface>
-        </collision>
+        </visual>
       </link>
       <static>true</static>
-    </model -->
+    </model>
 
-    <gui>
+    <!-- gui>
       <camera name="user_camera">
         <pose>0 0 30 0 1.5 0</pose>
       </camera>
-    </gui>
+    </gui -->
   
     <model name="column1">
       <pose>-5 -5 0.5 0 0 0</pose>
