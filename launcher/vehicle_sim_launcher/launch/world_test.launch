@@ -8,6 +8,7 @@
   <arg name="rvizconfig" default="$(find urdf_tutorial)/rviz/urdf.rviz" />
 
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <env name="GAZEBO_MODEL_PATH" value="$(find gazebo_world_description)"/>
     <arg name="world_name" default="$(find gazebo_world_description)/worlds/KUEparking.world"/> 
     <arg name="paused" value="false"/>
     <arg name="use_sim_time" value="true"/>
@@ -16,7 +17,8 @@
     <arg name="debug" value="false"/>
   </include>
 
-  <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-param robot_description -urdf -model autoware_gazebo" />
+  <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model"
+    args="-param robot_description -urdf -model autoware_gazebo" />
 
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
   <node name="rqt_robot_steering" pkg="rqt_robot_steering" type="rqt_robot_steering" />
@@ -33,17 +35,20 @@
 
     <rosparam file="$(find vehicle_model)/config/vehicle_info.yaml" command="load"/>
 
-    <node name="vehicle_input_subscriber" pkg="vehicle_sim_interface" type="vehicle_input_subscriber" respawn="false"
+    <node name="vehicle_input_subscriber" pkg="vehicle_sim_interface"
+      type="vehicle_input_subscriber" respawn="false"
           output="screen">
       <remap from="cmd_vel" to="/cmd_vel"/>
       <remap from="twist_cmd" to="/twist_cmd"/>
     </node>
-    <node name="vehicle_info_publisher" pkg="vehicle_sim_interface" type="vehicle_info_publisher" respawn="false"
+    <node name="vehicle_info_publisher" pkg="vehicle_sim_interface"
+      type="vehicle_info_publisher" respawn="false"
           output="screen">
     </node>
   </group>
 
-  <node name="maruco_fl" pkg="maruco" type="maruco" args="fl" required="true" output="screen">
+  <node name="maruco_fl" pkg="maruco" type="maruco" args="fl"
+    required="true" output="screen">
 
     <!--Detector-->
     <param name="debug" value="true"/>

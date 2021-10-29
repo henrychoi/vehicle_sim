@@ -37,14 +37,89 @@
       <static>true</static>
     </model>
 
-    <!-- gui>
-      <camera name="user_camera">
-        <pose>0 0 30 0 1.5 0</pose>
-      </camera>
-    </gui -->
-  
+    <gui>
+      <!-- camera name="chase_cam">
+        <track_visual>
+          <name>autoware_gazebo</name>
+          <static>true</static>
+          <use_model_frame>true</use_model_frame>
+          <xyz>-3 0 3</xyz>
+        </track_visual>
+      </camera -->
+    </gui>
+
+    <model name="trailer">
+      <pose>2 0 0.15 0 0 0</pose>
+      <static>false</static>
+      <link name="trailer">
+        <inertial>
+          <mass>1.0</mass>
+          <inertia> <!-- inertias are tricky to compute -->
+            <!-- http://gazebosim.org/tutorials?tut=inertia&cat=build_robot -->
+            <ixx>0.083</ixx>       <!-- for a box: ixx = 0.083 * mass * (y*y + z*z) -->
+            <ixy>0.0</ixy>         <!-- for a box: ixy = 0 -->
+            <ixz>0.0</ixz>         <!-- for a box: ixz = 0 -->
+            <iyy>0.083</iyy>       <!-- for a box: iyy = 0.083 * mass * (x*x + z*z) -->
+            <iyz>0.0</iyz>         <!-- for a box: iyz = 0 -->
+            <izz>0.083</izz>       <!-- for a box: izz = 0.083 * mass * (x*x + y*y) -->
+          </inertia>
+        </inertial>
+        <collision name="collision">
+          <geometry>
+            <box>
+              <size>0.6 0.5 0.4</size>
+            </box>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <box>
+              <size>0.6 0.5 0.4</size>
+            </box>
+          </geometry>
+        </visual>
+      </link>
+
+      <include>
+        <uri>model://aruco_visual_marker_4</uri>
+        <pose relative_to="trailer">-0.3 -0.15 -0.1  0 -1.57079 0</pose>
+      </include>
+      <joint name="aruco4_joint" type="fixed">
+        <child>aruco_visual_marker_4::marker</child>
+        <parent>trailer</parent>
+      </joint>
+
+      <include>
+        <uri>model://aruco_visual_marker_5</uri>
+        <pose relative_to="trailer">-0.30 0.15 -0.1  0 -1.57079 0</pose>
+      </include>
+      <joint name="aruco5_joint" type="fixed">
+        <child>aruco_visual_marker_5::marker</child>
+        <parent>trailer</parent>
+      </joint>
+
+      <include>
+        <uri>model://aruco_visual_marker_6</uri>
+        <pose relative_to="trailer">0.30 -0.15 -0.1  0 -1.57079 3.14159</pose>
+      </include>
+      <joint name="aruco6_joint" type="fixed">
+        <child>aruco_visual_marker_6::marker</child>
+        <parent>trailer</parent>
+      </joint>
+
+      <include>
+        <uri>model://aruco_visual_marker_7</uri>
+        <pose relative_to="trailer">0.31 0.15 -0.1  0 -1.57079 3.14159</pose>
+      </include>
+      <joint name="aruco7_joint" type="fixed">
+        <child>aruco_visual_marker_7::marker</child>
+        <parent>trailer</parent>
+      </joint>
+
+    </model>
+
     <model name="column1">
-      <pose>-5 -5 0.5 0 0 0</pose>
+      <pose>-5 -5 1.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry>
@@ -65,7 +140,7 @@
     </model>
 
     <model name="column2">
-      <pose>-5 5 0.5 0 0 0</pose>
+      <pose>-5 5 1.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry>
@@ -86,7 +161,7 @@
     </model>
 
     <model name="column3">
-      <pose>5 -5 0.5 0 0 0</pose>
+      <pose>5 -5 1.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry>
@@ -107,7 +182,7 @@
     </model>
 
     <model name="column4">
-      <pose>5 5 0.5 0 0 0</pose>
+      <pose>5 5 1.5 0 0 0</pose>
       <link name="link">
         <collision name="collision">
           <geometry>
