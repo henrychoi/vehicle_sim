@@ -31,16 +31,16 @@ private:
 	string link_name = "maruco_";
 
 	/**
-	 * Camera calibration matrix pre initialized with calibration values for the test camera.
+	 * Camera _calibration matrix pre initialized with _calibration values for the test camera.
 	 */
 	double data_calibration[9] = {640, 0, 360, 0, 640, 360, 0, 0, 1};
-	Mat calibration = cv::Mat(3, 3, CV_64F, data_calibration);
+	Mat _calibration = cv::Mat(3, 3, CV_64F, data_calibration);
 
 	/**
-	 * Lenses distortion matrix initialized with values for the test camera.
+	 * Lenses _distortion matrix initialized with values for the test camera.
 	 */
 	double data_distortion[5] = {0, 0, 0, 0, 0};
-	Mat distortion = cv::Mat(1, 5, CV_64F, data_distortion);
+	Mat _distortion = cv::Mat(1, 5, CV_64F, data_distortion);
 
 	image_transport::ImageTransport _it;
 	tf::TransformBroadcaster broadcaster;
@@ -49,12 +49,15 @@ private:
 	ros::Subscriber sub_camera_info;
 
 	/**
-	 * Flag to check if calibration parameters were received.
-	 * If set to false the camera will be calibrated when a camera info message is received.
+	 * Flag to check if _calibration parameters were received.
+	 * If set to false the camera will be _calibrated when a camera info message is received.
 	 */
-	bool calibrated;
+	bool _calibrated;
 
 	bool debug;
+
+	Ptr<aruco::GridBoard> _board;
+	Vec3d _rvec, _tvec;
 };
 
 /**
@@ -110,7 +113,19 @@ void MarucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 	// ROS_INFO("onFrame");// %u.%09u", msg->header.stamp.sec, msg->header.stamp.nsec);
 	try {
 		Mat frame = cv_bridge::toCvShare(msg, "bgr8")->image;
-
+		vector<int> markerIds;
+		vector<vector<Point2f>> markerCorners;
+		aruco::detectMarkers(frame, _board->dictionary, markerCorners, markerIds
+			// optional args
+			// detector parameters, rejectedImgPoints, _calibration, _distortion
+			);
+		ROS_INFO("Detected %zd markers", markerIds.size());
+		if(markerIds.size() > 0
+			&& aruco::estimatePoseBoard(markerCorners, markerIds, _board
+					, _calibration, _distortion, _rvec, _tvec)) {
+			ROS_INFO("R = [%.3f, %.3f, %.3f] T = [%.3f, %.3f, %.3f]"
+					, _rvec[0], _rvec[1], _rvec[2], _tvec[0], _tvec[1], _tvec[2]);
+		}
 #if 0
 		/* Publish TF note the flipping from CV --> ROS
 			Units should be in meters and radians. The OpenCV uses
@@ -157,7 +172,7 @@ void MarucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 			, msg->header.stamp, "base_link", link_name));
 
 		if(debug) {
-			ArucoDetector::drawOrigin(frame, found, calibration, distortion, 0.1);
+			ArucoDetector::drawOrigin(frame, found, _calibration, _distortion, 0.1);
 			auto img = boost::make_shared<sensor_msgs::Image>();
 			convert_frame_to_message(frame, img);
 			// preserve the timestamp from the image frame
@@ -172,22 +187,22 @@ void MarucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 
 /**
  * On camera info callback.
- * Used to receive camera calibration parameters.
+ * Used to receive camera _calibration parameters.
  */
 void MarucoPublisher::onCameraInfo(const sensor_msgs::CameraInfo &msg) {
-	if(calibrated) return;
-	calibrated = true;
+	if(_calibrated) return;
+	_calibrated = true;
 	
 	for(unsigned int i = 0; i < 9; i++)
-		calibration.at<double>(i / 3, i % 3) = msg.K[i];
+		_calibration.at<double>(i / 3, i % 3) = msg.K[i];
 	
 	for(unsigned int i = 0; i < 5; i++)
-		distortion.at<double>(0, i) = msg.D[i];
+		_distortion.at<double>(0, i) = msg.D[i];
 
 	if(debug) {
-		cout << "Camera calibration param received" << endl;
-		cout << "Camera: " << calibration << endl;
-		cout << "Distortion: " << distortion << endl;
+		cout << "Camera _calibration param received" << endl;
+		cout << "Camera: " << _calibration << endl;
+		cout << "Distortion: " << _distortion << endl;
 	}
 }
 
@@ -224,10 +239,17 @@ MarucoPublisher::MarucoPublisher(const char* suffix)
 {
 	link_name += suffix;
 
-	_nh.param<bool>("debug", debug, false);
-	_nh.param<bool>("calibrated", calibrated, false);
+	int Nrows, Ncols;
+	float length, gap;
 
-	//Camera instrinsic calibration parameters
+	_nh.param<bool>("debug", debug, false);
+	_nh.param<bool>("calibrated", _calibrated, false);
+	_nh.param<int>("Nrows", Nrows, 1);
+	_nh.param<int>("Ncols", Ncols, 1);
+	_nh.param<float>("length", length, 0.2);
+	_nh.param<float>("gap", gap, 0.02);
+
+	//Camera instrinsic _calibration parameters
 	if(_nh.hasParam("calibration")) {
 		string data;
 		_nh.param<string>("calibration", data, "");
@@ -237,12 +259,12 @@ MarucoPublisher::MarucoPublisher(const char* suffix)
 
 		for(unsigned int i = 0; i < 9; i++)
 		{
-			calibration.at<double>(i / 3, i % 3) = values[i];
+			_calibration.at<double>(i / 3, i % 3) = values[i];
 		}
 	}
 
 #if 0
-	//Camera distortion calibration parameters
+	//Camera _distortion _calibration parameters
 	if(_nh.hasParam("distortion"))
 	{
 		string data;
@@ -253,14 +275,14 @@ MarucoPublisher::MarucoPublisher(const char* suffix)
 
 		for(unsigned int i = 0; i < 5; i++)
 		{
-			distortion.at<double>(0, i) = values[i];
+			_distortion.at<double>(0, i) = values[i];
 		}
 
-		calibrated = true;
+		_calibrated = true;
 	}
 #endif
-
-
+	auto dict = aruco::getPredefinedDictionary(aruco::DICT_4X4_50);
+	_board = aruco::GridBoard::create(Ncols, Nrows, length, gap, dict);
 }
 
 int main(int argc, char **argv) {

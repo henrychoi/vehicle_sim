@@ -48,9 +48,13 @@
   </group>
 
   <!-- Detect ARUCO board, rather than just each --> 
-  <!--node name="maruco_rl" pkg="maruco" type="maruco" args="rl"
+  <node name="maruco_rl" pkg="maruco" type="maruco" args="rl"
     required="true" output="screen">
 
-    <param name="debug" value="true"/> 
-  </node-->
+    <param name="debug" value="true"/>
+    <param name="Nrows" value="1"/>
+    <param name="Ncols" value="3"/>
+    <param name="lenth" value="0.12"/>
+    <param name="gap" value="0.02"/>
+  </node>
 </launch>
