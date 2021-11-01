@@ -47,19 +47,10 @@
     </node>
   </group>
 
-  <node name="maruco_fl" pkg="maruco" type="maruco" args="fl"
+  <!-- Detect ARUCO board, rather than just each --> 
+  <!--node name="maruco_rl" pkg="maruco" type="maruco" args="rl"
     required="true" output="screen">
 
-    <!--Detector-->
-    <param name="debug" value="true"/>
-    <param name="cosine_limit" value="0.7"/>
-    <param name="theshold_block_size_min" value="3"/>
-    <param name="theshold_block_size_max" value="21"/>
-    <param name="max_error_quad" value="0.035"/>
-    <param name="min_area" value="100"/>
-
-    <!--Markers SIZE_CM POS_XYZ ROT_XYZ-->
-    <param name="marker0" value="0.2_0_0_0_0_0_0"/>
-    <param name="marker1" value="0.2_0_0_0_0_0_0"/>    
-  </node>
+    <param name="debug" value="true"/> 
+  </node-->
 </launch>

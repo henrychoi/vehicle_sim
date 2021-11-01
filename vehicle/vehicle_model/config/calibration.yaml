@@ -1,10 +1,10 @@
 base_link2camera:
-  x: 0.0
+  x: -1
   y: 0.0
-  z: 2.5
+  z: 0.1
   roll: 0.0
   pitch: 0.0
-  yaw: 0.0
+  yaw: 2.5
 base_link2imu:
   x: 0.0
   y: 0.0

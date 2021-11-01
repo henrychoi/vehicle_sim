@@ -54,7 +54,7 @@
   <!-- ================ sensor to base_link xforms ================ -->
 	<xacro:property name="calibration" value="${load_yaml('$(find vehicle_model)/config/calibration.yaml')}"/>
 
-  <xacro:monocular_camera_macro suffix="cam_fl" parent="base_link" namespace="cam_fl" 
+  <xacro:monocular_camera_macro suffix="cam_rl" parent="base_link" namespace="cam_rl" 
                                 x="${calibration['base_link2camera']['x']}"
                                 y="${calibration['base_link2camera']['y']}"
                                 z="${calibration['base_link2camera']['z']}"

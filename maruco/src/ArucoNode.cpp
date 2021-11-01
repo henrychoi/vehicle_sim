@@ -4,6 +4,7 @@
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/calib3d/calib3d.hpp>
+#include <opencv2/aruco.hpp>
 
 #include <ros/ros.h>
 #include <ros/console.h>
@@ -14,10 +15,6 @@
 #include <image_transport/image_transport.h>
 #include <tf/transform_broadcaster.h>
 #include <cv_bridge/cv_bridge.h>
-
-#include "ArucoMarker.cpp"
-#include "ArucoMarkerInfo.cpp"
-#include "ArucoDetector.cpp"
 
 using namespace cv;
 using namespace std;
@@ -45,11 +42,6 @@ private:
 	double data_distortion[5] = {0, 0, 0, 0, 0};
 	Mat distortion = cv::Mat(1, 5, CV_64F, data_distortion);
 
-	/**
-	 * List of known of markers, to get the absolute position and rotation of the camera, some of these are required.
-	 */
-	vector<ArucoMarkerInfo> known = vector<ArucoMarkerInfo>();
-
 	image_transport::ImageTransport _it;
 	tf::TransformBroadcaster broadcaster;
 	image_transport::Publisher pub_debug_img;
@@ -63,44 +55,6 @@ private:
 	bool calibrated;
 
 	bool debug;
-
-	/**
-	 * Cosine limit used during the quad detection phase.
-	 * Value between 0 and 1.
-	 * By default 0.8 is used.
-	 * The bigger the value more distortion tolerant the square detection will be.
-	 */
-	float cosine_limit;
-
-	/**
-	 * Maximum error to be used by geometry poly aproximation method in the quad detection phase.
-	 * By default 0.035 is used.
-	 */
-	float max_error_quad;
-
-	/**
-	 * Adaptive theshold pre processing block size.
-	 */
-	int theshold_block_size;
-
-	/**
-	 * Minimum threshold block size.
-	 * By default 5 is used.
-	 */
-	int theshold_block_size_min;
-
-	/**
-	 * Maximum threshold block size.
-	 * By default 9 is used.
-	 */
-	int theshold_block_size_max;
-
-	/**
-	 * Minimum area considered for aruco markers.
-	 * Should be a value high enough to filter blobs out but detect the smallest marker necessary.
-	 * By default 100 is used.
-	 */
-	int min_area;
 };
 
 /**
@@ -157,72 +111,7 @@ void MarucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 	try {
 		Mat frame = cv_bridge::toCvShare(msg, "bgr8")->image;
 
-		//Process image and get markers
-		vector<ArucoMarker> markers = ArucoDetector::getMarkers(frame, cosine_limit, theshold_block_size, min_area, max_error_quad);
-
-		//Visible
-		vector<ArucoMarker> found;
-
-		//Vector of points
-		vector<Point2f> projected;
-		vector<Point3f> world;
-
-		if(markers.size() == 0)
-		{
-			theshold_block_size += 2;
-
-			if(theshold_block_size > theshold_block_size_max)
-			{
-				theshold_block_size = theshold_block_size_min;
-			}
-		}
-
-		//Check known markers and build known of points
-		for(unsigned int i = 0; i < markers.size(); i++)
-			for(unsigned int j = 0; j < known.size(); j++)
-				if(markers[i].id == known[j].id) {
-					markers[i].attachInfo(known[j]);
-					
-					for(unsigned int k = 0; k < 4; k++)
-					{
-						projected.push_back(markers[i].projected[k]);
-						world.push_back(known[j].world[k]);
-					}
-
-					found.push_back(markers[i]);
-				}
-
-		//Draw markers
-		if(debug) {
-			ArucoDetector::drawMarkers(frame, markers, calibration, distortion);
-		}
-
-		//Check if any marker was found
-		if(!world.size()) {
-			auto img = boost::make_shared<sensor_msgs::Image>();
-			convert_frame_to_message(frame, img);
-			img->header.stamp = msg->header.stamp; // preserve the timestamp
-			pub_debug_img.publish(img); //throw up the debug img
-			return; // and bail
-		}
-
-		// Calculate position and rotation from CV PNP
-		Mat rotation, position;
-		#if CV_MAJOR_VERSION == 2
-			solvePnP(world, projected, calibration, distortion, rotation, position, false, ITERATIVE);
-		#else
-			solvePnP(world, projected, calibration, distortion, rotation, position, false, SOLVEPNP_ITERATIVE);
-		#endif
-
-		//Invert position and rotation to get camera coords
-		Mat rodrigues;
-		Rodrigues(rotation, rodrigues);
-		
-		Mat camera_rotation;
-		Rodrigues(rodrigues.t(), camera_rotation);
-		
-		Mat camera_position = -rodrigues.t() * position;
-
+#if 0
 		/* Publish TF note the flipping from CV --> ROS
 			Units should be in meters and radians. The OpenCV uses
 			Z+ to represent depth, Y- for height and X+ for lateral, but ROS uses X+ for depth (axial), Z+ for height, and
@@ -275,6 +164,7 @@ void MarucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 			img->header.stamp = msg->header.stamp;
 			pub_debug_img.publish(img);
 		}
+#endif
 	} catch(cv_bridge::Exception& e) {
 		ROS_ERROR("Error getting image data");
 	}
@@ -335,17 +225,7 @@ MarucoPublisher::MarucoPublisher(const char* suffix)
 	link_name += suffix;
 
 	_nh.param<bool>("debug", debug, false);
-	_nh.param<float>("cosine_limit", cosine_limit, 0.7);
-	_nh.param<int>("theshold_block_size_min", theshold_block_size_min, 3);
-	_nh.param<int>("theshold_block_size_max", theshold_block_size_max, 21);
-	_nh.param<float>("max_error_quad", max_error_quad, 0.035); 
-	_nh.param<int>("min_area", min_area, 100);
 	_nh.param<bool>("calibrated", calibrated, false);
-
-	//Initial threshold block size
-	theshold_block_size = (theshold_block_size_min + theshold_block_size_max) / 2;
-	if(theshold_block_size % 2 == 0)
-		theshold_block_size++;
 
 	//Camera instrinsic calibration parameters
 	if(_nh.hasParam("calibration")) {
@@ -380,24 +260,7 @@ MarucoPublisher::MarucoPublisher(const char* suffix)
 	}
 #endif
 
-	//Aruco makers passed as parameters
-	for(unsigned int i = 0; i < 2; i++) {
-		if(_nh.hasParam("marker" + to_string(i))) {
-			string data;
-			_nh.param<string>("marker" + to_string(i), data, "1_0_0_0_0_0_0");
 
-			double values[7];
-			stringToDoubleArray(data, values, 7, "_");
-			known.push_back(ArucoMarkerInfo(i, values[0]
-				, Point3d(-values[2], -values[3], -values[1])
-				, Point3d(-values[5], -values[6], values[4])));
-		}
-	}
-
-	if(debug) { //Print all known markers
-		for(unsigned int i = 0; i < known.size(); i++)
-			known[i].print();
-	}
 }
 
 int main(int argc, char **argv) {
