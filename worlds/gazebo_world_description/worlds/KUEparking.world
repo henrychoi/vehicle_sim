@@ -83,9 +83,9 @@
       </link>
 
       <link name='aruco_visual_marker_rear'>
-        <pose relative_to="trailer">-0.3 0 -0.1  0 -1.57079 0</pose>
+        <pose relative_to="trailer">-0.3 0 0  0 -1.57079 0</pose>
         <visual name='visual'>
-          <geometry><box><size>0.1778 0.1778 1e-05</size></box></geometry>
+          <geometry><box><size>0.337 0.501 1e-05</size></box></geometry>
           <material>
             <script>
               <uri>model://materials/scripts</uri>
@@ -104,9 +104,6 @@
           <cast_shadows>1</cast_shadows>
           <transparency>0</transparency>
         </visual>
-        <collision name='collision'>
-          <geometry><box><size>0.1778 0.1778 1e-05</size></box></geometry>
-        </collision>
       </link>
       <joint name="aruco_rear_joint" type="fixed">
         <child>aruco_visual_marker_rear</child>
@@ -114,9 +111,9 @@
       </joint>
 
       <link name='aruco_visual_marker_front'>
-        <pose relative_to="trailer">0.3 0 -0.1  0 -1.57079 3.14159</pose>
+        <pose relative_to="trailer">0.3 0 0  0 -1.57079 3.14159</pose>
         <visual name='visual'>
-          <geometry><box><size>0.1778 0.1778 1e-05</size></box></geometry>
+          <geometry><box><size>0.337 0.501 1e-05</size></box></geometry>
           <material>
             <script>
               <uri>model://materials/scripts</uri>
@@ -135,9 +132,6 @@
           <cast_shadows>1</cast_shadows>
           <transparency>0</transparency>
         </visual>
-        <collision name='collision'>
-          <geometry><box><size>0.1778 0.1778 1e-05</size></box></geometry>
-        </collision>
       </link>
       <joint name="aruco_front_joint" type="fixed">
         <child>aruco_visual_marker_front</child>

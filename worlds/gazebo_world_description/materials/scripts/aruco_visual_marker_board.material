@@ -6,7 +6,7 @@ material ArucoVisualMarkerBoard/Marker
 		{
 			texture_unit
 			{
-				texture aruco_mark_4.png
+				texture 2x3.png
 			}
 		}
 	}
