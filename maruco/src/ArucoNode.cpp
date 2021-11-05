@@ -246,8 +246,8 @@ MarucoPublisher::MarucoPublisher(const char* suffix)
 	_nh.param<bool>("calibrated", _calibrated, false);
 	_nh.param<int>("Nrows", Nrows, 1);
 	_nh.param<int>("Ncols", Ncols, 1);
-	_nh.param<float>("length", length, 0.2);
-	_nh.param<float>("gap", gap, 0.02);
+	_nh.param<float>("length", length, 0.15);
+	_nh.param<float>("gap", gap, 0.01);
 
 	//Camera instrinsic _calibration parameters
 	if(_nh.hasParam("calibration")) {
