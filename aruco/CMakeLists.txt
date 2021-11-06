@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(maruco)
+project(aruco)
 
 add_compile_options(-std=c++17)
 
@@ -12,13 +12,12 @@ find_package(OpenCV REQUIRED)
 #Catkin dependencies
 catkin_package(CATKIN_DEPENDS tf roscpp std_msgs)
 
-#Aruco ROS node
-add_executable(maruco src/MarucoNode.cpp)
-target_link_libraries(maruco ${catkin_LIBRARIES} ${OpenCV_LIBS})
+add_executable(aruco src/ArucoNode.cpp)
+target_link_libraries(aruco ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
 include_directories(include ${catkin_INCLUDE_DIRS} ${OpenCV_INCLUDE_DIRS})
 
-install(TARGETS maruco
+install(TARGETS aruco
 	ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 	LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 	RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
