@@ -19,9 +19,9 @@
 using namespace cv;
 using namespace std;
 
-class ArucoPublisher {
+class MarucoPublisher {
 public:
-	ArucoPublisher(const char* suffix);
+	MarucoPublisher(const char* suffix);
 
 private:
 	void onFrame(const sensor_msgs::ImageConstPtr& msg);
@@ -35,7 +35,7 @@ private:
 	 * Camera _intrinsic matrix pre initialized with _intrinsic values for the test camera.
 	 */
 	double data_calibration[9] = {
-		640, 0, 360, 
+		640, 0, 640, 
 		0, 	640, 360,
 		0, 0, 1
 	};
@@ -64,17 +64,6 @@ private:
 	Ptr<aruco::GridBoard> _board;
 	Vec3d _rvec, _tvec;
 };
-
-/**
- * Draw yellow text with black outline into a frame.
- * @param frame Frame mat.
- * @param text Text to be drawn into the frame.
- * @param point Position of the text in frame coordinates.
- */
-void drawText(Mat frame, string text, Point point) {
-	putText(frame, text, point, FONT_HERSHEY_SIMPLEX, 0.5, 0, 2, LINE_AA);
-	putText(frame, text, point, FONT_HERSHEY_SIMPLEX, 0.5, 255, 1, LINE_AA);
-}
 
 /*
  * CV array type to ROS sensor_msgs/Image type
@@ -114,7 +103,7 @@ static void convert_frame_to_message(const cv::Mat& frame,
  * Callback executed every time a new camera frame is received.
  * This callback is used to process received images and publish messages with camera position data if any.
  */
-void ArucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
+void MarucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 	// ROS_INFO("onFrame");// %u.%09u", msg->header.stamp.sec, msg->header.stamp.nsec);
 	if (!_calibrated) {
 		ROS_INFO("camera not yet calibrated");
@@ -131,23 +120,12 @@ void ArucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 			);
 		if(markerIds.size() <= 0
 			|| !aruco::estimatePoseBoard(markerCorners, markerIds, _board
-					, _intrinsic, _distortion, _rvec, _tvec
-					, cv::SOLVEPNP_P3P)) {
+					, _intrinsic, _distortion, _rvec, _tvec)) {
 			return;
 		}
 		float angle = sqrt(_rvec[0]*_rvec[0] + _rvec[1]*_rvec[1] + _rvec[2]*_rvec[2]);
 		tf::Vector3 axis(_rvec[2], -_rvec[0], _rvec[1]); // CV --> ROS
-	#if 1
 		tf::Quaternion q(axis, angle);
-	#else
-		float sina2 = sin(0.5f * angle);
-		float scale = sina2 / angle;
-		tf::Quaternion q(axis.x() * scale
-			, axis.y() * scale
-			, axis.z() * scale
-			, cos(0.5f * angle)
-		);
-	#endif
 		auto elapsed = ros::Time::now() - t0;
 		ROS_INFO("%d nsec; %zd markers; Q = [%.2f, %.2f, %.2f, %.2f] T = [%.3f, %.3f, %.3f]"
 				, elapsed.nsec, markerIds.size()
@@ -215,7 +193,7 @@ void ArucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
  * On camera info callback.
  * Used to receive camera _intrinsic parameters.
  */
-void ArucoPublisher::onCameraInfo(const sensor_msgs::CameraInfo &msg) {
+void MarucoPublisher::onCameraInfo(const sensor_msgs::CameraInfo &msg) {
 	if(_calibrated) return;
 	_calibrated = true;
 	
@@ -254,15 +232,15 @@ void stringToDoubleArray(string data, double* values, unsigned int count, string
 	}
 }
 
-ArucoPublisher::ArucoPublisher(const char* suffix)
+MarucoPublisher::MarucoPublisher(const char* suffix)
 : _nh("")
 , _name_prefix(string("aruco_") + suffix + "/")
 , _it(_nh)
 , pub_debug_img(_it.advertise(_name_prefix +"debug", 1))
 , sub_camera(_it.subscribe(string("cam_") + suffix + "/image_raw"
-	, 1, &ArucoPublisher::onFrame, this))
+	, 1, &MarucoPublisher::onFrame, this))
 , sub_camera_info(_nh.subscribe(string("cam_") + suffix + "/camera_info"
-	, 1 , &ArucoPublisher::onCameraInfo, this))
+	, 1 , &MarucoPublisher::onCameraInfo, this))
 {
 	const auto ns = _nh.getNamespace();
 	link_name += suffix;
@@ -325,7 +303,7 @@ int main(int argc, char **argv) {
 	}
 	argc = 0;
 	ros::init(argc, NULL, string("aruco_") + argv[1]);
-	ArucoPublisher pub(argv[1]);
+	MarucoPublisher pub(argv[1]);
 	ros::spin();
 
 	return 0;
