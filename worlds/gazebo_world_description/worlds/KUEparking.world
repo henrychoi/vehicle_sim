@@ -82,7 +82,7 @@
         </visual>
       </link>
 
-      <link name='aruco_visual_marker_rear'>
+      <link name='aruco_rear'>
         <pose relative_to="trailer">-0.3 0 0  0 -1.57079 0</pose>
         <visual name='visual'>
           <geometry><box><size>0.337 0.501 1e-05</size></box></geometry>
@@ -106,11 +106,18 @@
         </visual>
       </link>
       <joint name="aruco_rear_joint" type="fixed">
-        <child>aruco_visual_marker_rear</child>
+        <child>aruco_rear</child>
         <parent>trailer</parent>
       </joint>
+      <link name='aruco_rear_corner'>
+        <pose>0 -0.235 -0.155  0 0 0</pose>
+      </link>
+      <joint name="aruco_rear_corner_joint" type="fixed">
+        <child>aruco_rear_corner</child>
+        <parent>aruco_rear</parent>
+      </joint>
 
-      <link name='aruco_visual_marker_front'>
+      <link name='aruco_front'>
         <pose relative_to="trailer">0.3 0 0  0 -1.57079 3.14159</pose>
         <visual name='visual'>
           <geometry><box><size>0.337 0.501 1e-05</size></box></geometry>
@@ -134,8 +141,15 @@
         </visual>
       </link>
       <joint name="aruco_front_joint" type="fixed">
-        <child>aruco_visual_marker_front</child>
+        <child>aruco_front</child>
         <parent>trailer</parent>
+      </joint>
+      <link name='aruco_front_corner'>
+        <pose>0 -0.235 -0.155  0 0 0</pose>
+      </link>
+      <joint name="aruco_front_corner_joint" type="fixed">
+        <child>aruco_front_corner</child>
+        <parent>aruco_front</parent>
       </joint>
 
       <link name="leg1">

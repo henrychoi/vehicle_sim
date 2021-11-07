@@ -111,7 +111,7 @@ void MarucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 	}
 	try {
 		auto t0 = ros::Time::now();
-		Mat frame = cv_bridge::toCvShare(msg, "mono8")->image;
+		Mat frame = cv_bridge::toCvShare(msg, "bgr8")->image;
 		vector<int> markerIds;
 		vector<vector<Point2f>> markerCorners;
 		aruco::detectMarkers(frame, _board->dictionary, markerCorners, markerIds

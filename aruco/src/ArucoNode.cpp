@@ -27,9 +27,8 @@ private:
 	void onFrame(const sensor_msgs::ImageConstPtr& msg);
 	void onCameraInfo(const sensor_msgs::CameraInfo &msg);
 
+	string _name_prefix, _cam_prefix;
     ros::NodeHandle _nh;
-	string _name_prefix;
-	string link_name = "aruco_";
 
 	/**
 	 * Camera _intrinsic matrix pre initialized with _intrinsic values for the test camera.
@@ -64,17 +63,6 @@ private:
 	Ptr<aruco::GridBoard> _board;
 	Vec3d _rvec, _tvec;
 };
-
-/**
- * Draw yellow text with black outline into a frame.
- * @param frame Frame mat.
- * @param text Text to be drawn into the frame.
- * @param point Position of the text in frame coordinates.
- */
-void drawText(Mat frame, string text, Point point) {
-	putText(frame, text, point, FONT_HERSHEY_SIMPLEX, 0.5, 0, 2, LINE_AA);
-	putText(frame, text, point, FONT_HERSHEY_SIMPLEX, 0.5, 255, 1, LINE_AA);
-}
 
 /*
  * CV array type to ROS sensor_msgs/Image type
@@ -135,33 +123,7 @@ void ArucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 					, cv::SOLVEPNP_P3P)) {
 			return;
 		}
-		float angle = sqrt(_rvec[0]*_rvec[0] + _rvec[1]*_rvec[1] + _rvec[2]*_rvec[2]);
-		tf::Vector3 axis(_rvec[2], -_rvec[0], _rvec[1]); // CV --> ROS
-	#if 1
-		tf::Quaternion q(axis, angle);
-	#else
-		float sina2 = sin(0.5f * angle);
-		float scale = sina2 / angle;
-		tf::Quaternion q(axis.x() * scale
-			, axis.y() * scale
-			, axis.z() * scale
-			, cos(0.5f * angle)
-		);
-	#endif
-		auto elapsed = ros::Time::now() - t0;
-		ROS_INFO("%d nsec; %zd markers; Q = [%.2f, %.2f, %.2f, %.2f] T = [%.3f, %.3f, %.3f]"
-				, elapsed.nsec, markerIds.size()
-				, q[0], q[1], q[2], q[3], _tvec[0], _tvec[1], _tvec[2]);
-		if (_show_axis) { // Show the board frame
-		  	cv::aruco::drawAxis(frame, _intrinsic, _distortion, _rvec, _tvec, 0.8);
-			auto img = boost::make_shared<sensor_msgs::Image>();
-			convert_frame_to_message(frame, img);
-			// preserve the timestamp from the image frame
-			img->header.stamp = msg->header.stamp;
-			pub_debug_img.publish(img);
-		}
 
-#if 0
 		/* Publish TF note the flipping from CV --> ROS
 			Units should be in meters and radians. The OpenCV uses
 			Z+ to represent depth, Y- for height and X+ for lateral, but ROS uses X+ for depth (axial), Z+ for height, and
@@ -176,36 +138,43 @@ void ArucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 		*    | /                 |    | /
 		*    |/                  |    |/
 		*    O-------------> Y-  |    O-------------> X+
-		 */
+		 */		
+		float angle = sqrt(_rvec[0]*_rvec[0] + _rvec[1]*_rvec[1] + _rvec[2]*_rvec[2]);
+		tf::Vector3 axis(_rvec[2], -_rvec[0], _rvec[1]); // CV --> ROS
+	#if 1
+		tf::Quaternion q(axis, angle);
+	#else
+		float sina2 = sin(0.5f * angle);
+		float scale = sina2 / angle;
+		tf::Quaternion q(axis.x() * scale
+			, axis.y() * scale
+			, axis.z() * scale
+			, cos(0.5f * angle)
+		);
+	#endif
+
 		tf::Transform transform;
-		transform.setOrigin(tf::Vector3(
-			camera_position.at<double>(2, 0) // CV Z
-			, -camera_position.at<double>(0, 0) // -CV X
-			, -camera_position.at<double>(1, 0) // -CV Y
-			) ); 
-		tf::Quaternion q;
-		// geometry_msgs::Point message_position, message_rotation;
-		// Convert Euler angles to quaternion
-		double ex = camera_rotation.at<double>(2, 0)
-			, ey = -camera_rotation.at<double>(0, 0)
-			, ez = -camera_rotation.at<double>(1, 0)
-			, angle = sqrt(ex*ex + ey*ey + ez*ez);
-		if(angle > 0.0) {
-			auto sa = sin(angle/2.0);
-			q[0] = ex * sa/angle;
-			q[1] = ey * sa/angle;
-			q[2] = ez * sa/angle;
-			q[3] = cos(angle/2.0);
-		} else { //To avoid illegal expressions
-			ROS_ERROR("Failed to convert Euler(%.2f,%.2f,%.2f) --> quat"
-			 	, ex, ey, ez);
-			q[0] = q[1] = q[2] = 0.0;
-			q[3] = 1.0;
-		}
+		transform.setOrigin(tf::Vector3(_tvec[2], -_tvec[0], -_tvec[1]));
 		transform.setRotation(q);
-		broadcaster.sendTransform(tf::StampedTransform(transform
-			, msg->header.stamp, "base_link", link_name));
-#endif
+
+		auto elapsed = ros::Time::now() - t0;
+		ROS_INFO("%d nsec; %zd markers; Q = [%.2f, %.2f, %.2f, %.2f] T = [%.3f, %.3f, %.3f]"
+				, elapsed.nsec, markerIds.size()
+				, q[0], q[1], q[2], q[3], _tvec[0], _tvec[1], _tvec[2]);
+		if (_show_axis) { // Show the board frame
+		  	cv::aruco::drawAxis(frame, _intrinsic, _distortion, _rvec, _tvec, 0.8);
+			auto img = boost::make_shared<sensor_msgs::Image>();
+			convert_frame_to_message(frame, img);
+			// preserve the timestamp from the image frame
+			img->header.stamp = msg->header.stamp;
+			pub_debug_img.publish(img);
+		}
+		broadcaster.sendTransform(
+			tf::StampedTransform(transform, msg->header.stamp
+			, _cam_prefix + "_link"// parent link
+			, "aruco_front_corner") // child link
+		);
+
 	} catch(cv_bridge::Exception& e) {
 		ROS_ERROR("Error getting image data");
 	}
@@ -255,18 +224,16 @@ void stringToDoubleArray(string data, double* values, unsigned int count, string
 }
 
 ArucoPublisher::ArucoPublisher(const char* suffix)
-: _nh("")
-, _name_prefix(string("aruco_") + suffix + "/")
+: _name_prefix(string("aruco_") + suffix + "/")
+, _cam_prefix(string("cam_") + suffix)
+, _nh("")
 , _it(_nh)
 , pub_debug_img(_it.advertise(_name_prefix +"debug", 1))
-, sub_camera(_it.subscribe(string("cam_") + suffix + "/image_raw"
+, sub_camera(_it.subscribe(_cam_prefix + "/image_raw"
 	, 1, &ArucoPublisher::onFrame, this))
-, sub_camera_info(_nh.subscribe(string("cam_") + suffix + "/camera_info"
+, sub_camera_info(_nh.subscribe(_cam_prefix + "/camera_info"
 	, 1 , &ArucoPublisher::onCameraInfo, this))
 {
-	const auto ns = _nh.getNamespace();
-	link_name += suffix;
-
 	int Nrows, Ncols;
 	float length, gap;
 
