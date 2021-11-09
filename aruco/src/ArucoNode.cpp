@@ -11,10 +11,11 @@
 #include <std_msgs/String.h>
 #include <std_msgs/Int32.h>
 
+#include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
 #include <image_transport/image_transport.h>
-#include <tf/transform_broadcaster.h>
-#include <cv_bridge/cv_bridge.h>
+#include <tf2_ros/transform_broadcaster.h>
+#include <geometry_msgs/TransformStamped.h>
 
 using namespace cv;
 using namespace std;
@@ -47,10 +48,11 @@ private:
 	Mat _distortion = cv::Mat(1, 5, CV_64F, data_distortion);
 
 	image_transport::ImageTransport _it;
-	tf::TransformBroadcaster broadcaster;
 	image_transport::Publisher pub_debug_img;
 	image_transport::Subscriber sub_camera;
 	ros::Subscriber sub_camera_info;
+
+	tf2_ros::TransformBroadcaster br;
 
 	/**
 	 * Flag to check if _intrinsic parameters were received.
@@ -117,12 +119,21 @@ void ArucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 			// optional args
 			// detector parameters, rejectedImgPoints, _intrinsic, _distortion
 			);
+		// Vec3d _rvec, _tvec;
 		if(markerIds.size() <= 0
 			|| !aruco::estimatePoseBoard(markerCorners, markerIds, _board
 					, _intrinsic, _distortion, _rvec, _tvec
 					, cv::SOLVEPNP_P3P)) {
 			return;
 		}
+
+		geometry_msgs::TransformStamped transformStamped;
+		transformStamped.header.stamp = msg->header.stamp;
+		transformStamped.header.frame_id = _cam_prefix + "_link";// parent link
+		transformStamped.child_frame_id = "aruco_front_corner";
+		transformStamped.transform.translation.x = _tvec[2];
+  		transformStamped.transform.translation.y = -_tvec[0];
+		transformStamped.transform.translation.z = -_tvec[1];
 
 		/* Publish TF note the flipping from CV --> ROS
 			Units should be in meters and radians. The OpenCV uses
@@ -140,27 +151,29 @@ void ArucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 		*    O-------------> Y-  |    O-------------> X+
 		 */		
 		float angle = sqrt(_rvec[0]*_rvec[0] + _rvec[1]*_rvec[1] + _rvec[2]*_rvec[2]);
-		tf::Vector3 axis(_rvec[2], -_rvec[0], _rvec[1]); // CV --> ROS
-	#if 1
-		tf::Quaternion q(axis, angle);
+	#if 0
+		Quaternion q(axis, angle);
+		transformStamped.transform.rotation = q;
 	#else
 		float sina2 = sin(0.5f * angle);
 		float scale = sina2 / angle;
-		tf::Quaternion q(axis.x() * scale
-			, axis.y() * scale
-			, axis.z() * scale
-			, cos(0.5f * angle)
-		);
+		//Vector3 axis(, -_rvec[0], _rvec[1]); // CV --> ROS
+		transformStamped.transform.rotation.x = _rvec[2] * scale;
+		transformStamped.transform.rotation.y = -_rvec[0] * scale;
+		transformStamped.transform.rotation.z = -_rvec[1] * scale;
+		transformStamped.transform.rotation.w = cos(0.5f * angle);
 	#endif
 
-		tf::Transform transform;
-		transform.setOrigin(tf::Vector3(_tvec[2], -_tvec[0], -_tvec[1]));
-		transform.setRotation(q);
-
 		auto elapsed = ros::Time::now() - t0;
+		br.sendTransform(transformStamped);
+
 		ROS_INFO("%d nsec; %zd markers; Q = [%.2f, %.2f, %.2f, %.2f] T = [%.3f, %.3f, %.3f]"
 				, elapsed.nsec, markerIds.size()
-				, q[0], q[1], q[2], q[3], _tvec[0], _tvec[1], _tvec[2]);
+				, transformStamped.transform.rotation.x
+				, transformStamped.transform.rotation.y
+				, transformStamped.transform.rotation.z
+				, transformStamped.transform.rotation.w
+				, _tvec[0], _tvec[1], _tvec[2]);
 		if (_show_axis) { // Show the board frame
 		  	cv::aruco::drawAxis(frame, _intrinsic, _distortion, _rvec, _tvec, 0.8);
 			auto img = boost::make_shared<sensor_msgs::Image>();
@@ -169,12 +182,6 @@ void ArucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 			img->header.stamp = msg->header.stamp;
 			pub_debug_img.publish(img);
 		}
-		broadcaster.sendTransform(
-			tf::StampedTransform(transform, msg->header.stamp
-			, _cam_prefix + "_link"// parent link
-			, "aruco_front_corner") // child link
-		);
-
 	} catch(cv_bridge::Exception& e) {
 		ROS_ERROR("Error getting image data");
 	}

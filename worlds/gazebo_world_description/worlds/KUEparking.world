@@ -110,7 +110,7 @@
         <parent>trailer</parent>
       </joint>
       <link name='aruco_rear_corner'>
-        <pose>0 -0.235 -0.155  0 0 0</pose>
+        <pose relative_to="aruco_rear">0 -0.235 -0.155  0 0 0</pose>
       </link>
       <joint name="aruco_rear_corner_joint" type="fixed">
         <child>aruco_rear_corner</child>
@@ -145,7 +145,7 @@
         <parent>trailer</parent>
       </joint>
       <link name='aruco_front_corner'>
-        <pose>0 -0.235 -0.155  0 0 0</pose>
+        <pose relative_to="aruco_front">0 -0.235 -0.155  0 0 0</pose>
       </link>
       <joint name="aruco_front_corner_joint" type="fixed">
         <child>aruco_front_corner</child>
