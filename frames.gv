@@ -1,0 +1,26 @@
+digraph G {
+"base_footprint" -> "base_link"[label=" Broadcaster: /autoware_gazebo/robot_state_publisher\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"base_link" -> "imu_link"[label=" Broadcaster: /autoware_gazebo/robot_state_publisher\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"quad_link" -> "quad1_link"[label=" Broadcaster: /autoware_gazebo/robot_state_publisher\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"base_link" -> "quad_link"[label=" Broadcaster: /autoware_gazebo/robot_state_publisher\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"quad1_link" -> "quad1_optical_link"[label=" Broadcaster: /autoware_gazebo/robot_state_publisher\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"quad_link" -> "quad2_link"[label=" Broadcaster: /autoware_gazebo/robot_state_publisher\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"quad2_link" -> "quad2_optical_link"[label=" Broadcaster: /autoware_gazebo/robot_state_publisher\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"quad_link" -> "quad3_link"[label=" Broadcaster: /autoware_gazebo/robot_state_publisher\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"quad3_link" -> "quad3_optical_link"[label=" Broadcaster: /autoware_gazebo/robot_state_publisher\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"quad_link" -> "quad4_link"[label=" Broadcaster: /autoware_gazebo/robot_state_publisher\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"quad4_link" -> "quad4_optical_link"[label=" Broadcaster: /autoware_gazebo/robot_state_publisher\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"base_link" -> "steering_front_link"[label=" Broadcaster: /autoware_gazebo/robot_state_publisher\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"steering_front_link" -> "steering_left_front_link"[label=" Broadcaster: /autoware_gazebo/robot_state_publisher\nAverage rate: 50.302\nBuffer length: 4.97\nMost recent transform: 35.753\nOldest transform: 30.783\n"];
+"steering_front_link" -> "steering_right_front_link"[label=" Broadcaster: /autoware_gazebo/robot_state_publisher\nAverage rate: 50.302\nBuffer length: 4.97\nMost recent transform: 35.753\nOldest transform: 30.783\n"];
+"base_link" -> "wheel_left_rear_link"[label=" Broadcaster: /autoware_gazebo/robot_state_publisher\nAverage rate: 50.302\nBuffer length: 4.97\nMost recent transform: 35.753\nOldest transform: 30.783\n"];
+"base_link" -> "wheel_right_rear_link"[label=" Broadcaster: /autoware_gazebo/robot_state_publisher\nAverage rate: 50.302\nBuffer length: 4.97\nMost recent transform: 35.753\nOldest transform: 30.783\n"];
+"aruco" -> "trailer"[label=" Broadcaster: /aruco_trailer_broadcaster\nAverage rate: 10000.0\nBuffer length: 0.0\nMost recent transform: 0.0\nOldest transform: 0.0\n"];
+"quad3_link" -> "aruco"[label=" Broadcaster: /aruco\nAverage rate: 6.0\nBuffer length: 4.833\nMost recent transform: 35.761\nOldest transform: 30.928\n"];
+"steering_left_front_link" -> "wheel_left_front_link"[label=" Broadcaster: /autoware_gazebo/robot_state_publisher\nAverage rate: 10.204\nBuffer length: 4.9\nMost recent transform: 35.753\nOldest transform: 30.853\n"];
+"steering_right_front_link" -> "wheel_right_front_link"[label=" Broadcaster: /autoware_gazebo/robot_state_publisher\nAverage rate: 10.204\nBuffer length: 4.9\nMost recent transform: 35.753\nOldest transform: 30.853\n"];
+edge [style=invis];
+ subgraph cluster_legend { style=bold; color=black; label ="view_frames Result";
+"Recorded at time: 35.794"[ shape=plaintext ] ;
+}->"base_footprint";
+}

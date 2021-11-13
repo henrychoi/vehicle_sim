@@ -1,54 +1,44 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
-  <xacro:property name="pi" value="3.1415926835897931" />
+  <!-- xacro:property name="pi" value="3.1415926835897931" /-->
 
-
-  <xacro:macro name="monocular_camera_macro"
-    params="prefix parent x y z roll pitch yaw fps width height fov">
-    <xacro:property name="len" value="0.2" />
-    <xacro:property name="mass" value="0.1" />
-
-    <joint name="${prefix}_joint" type="fixed">
-      <origin rpy="${roll} ${pitch} ${yaw}" xyz="${x} ${y} ${z}"/>
-      <parent link="${parent}"/>
-      <child  link="${prefix}_link"/>
+  <xacro:macro name="D430IR_macro"
+    params="parent instance yaw x y z fps width height fov">
+    <joint name="quad${instance}_joint" type="fixed">
+      <origin rpy="0 0 ${yaw}" xyz="${x} ${y} ${z}"/>
+      <parent link="quad_link"/>
+      <child link="quad${instance}_link"/>
     </joint>
-
-    <link name="${prefix}_link">
+    <link name="quad${instance}_link">
       <visual>
-        <geometry><cylinder length="${len}" radius="0.02"/></geometry>
-        <origin rpy="0 0 0" xyz="0 0 0"/>
+        <geometry><box size="0.01 0.1 0.03"/></geometry>
         <material name="red">
           <color rgba="${255/255} ${108/255} ${10/255} 1.0"/>
         </material>
       </visual>
       <inertial>
         <origin rpy="0 0 0" xyz="0 0 0"/>
-        <mass value="${mass}"/>
-        <inertia ixx="${(len*len+len*len)*mass/12.0}" ixy="0.0" ixz="0.0" 
-                 iyy="${(len*len+len*len)*mass/12.0}" iyz="0.0" 
-                 izz="${(len*len+len*len)*mass/12.0}"/>
+        <mass value="0.05"/>
+        <inertia ixx="0.01" ixy="0.0" ixz="0.0" 
+                    iyy="0.01" iyz="0.0" 
+                        izz="0.01"/>
       </inertial>
-      <collision>
-        <origin rpy="0 0 0" xyz="0 0 0"/>
-        <geometry><cylinder length="${len}" radius="0.02"/></geometry>
-      </collision>
+      <collision><geometry><box size="0.01 0.1 0.03"/></geometry></collision>
     </link>
-  
-    <joint name="${prefix}_optical_joint" type="fixed">
-      <origin rpy="${-pi/2} 0 ${-pi/2}" xyz="0 0 0"/>
-      <parent link="${prefix}_link"/>
-      <child  link="${prefix}_optical_link"/>
-    </joint>
+
     <!-- seems necessary to get a right side up image; see frameName below -->
-    <link name="${prefix}_optical_link" />
-  
-    <!-- camera -->
-    <gazebo reference="${prefix}_link">
+    <joint name="quad${instance}_optical_joint" type="fixed">
+      <origin rpy="${-pi/2} 0 ${-pi/2}" xyz="0 0 0"/>
+      <parent link="quad${instance}_link"/>
+      <child  link="quad${instance}_optical_link"/>
+    </joint>
+    <link name="quad${instance}_optical_link" />
+
+    <gazebo reference="quad${instance}_link">
       <material>Gazebo/Black</material>
-      <sensor type="camera" name="${prefix}">
+      <sensor type="camera" name="quad${instance}">
         <update_rate>${fps}</update_rate>
-        <camera name="${prefix}">
+        <camera name="quad${instance}">
           <horizontal_fov>${fov}</horizontal_fov>
           <image>
             <width>${width}</width>
@@ -57,7 +47,7 @@
           </image>
           <clip>
             <near>0.02</near>
-            <far>3</far>
+            <far>30</far>
           </clip>
           <noise>
             <type>gaussian</type>
@@ -68,19 +58,20 @@
             <stddev>0.007</stddev>
           </noise>
         </camera>
+
         <plugin name="camera_controller" filename="libgazebo_ros_camera.so">
           <alwaysOn>true</alwaysOn>
           <updateRate>0.0</updateRate>
-          <cameraName>${prefix}</cameraName>
+          <cameraName>quad${instance}</cameraName>
           <imageTopicName>image_raw</imageTopicName>
           <cameraInfoTopicName>camera_info</cameraInfoTopicName>
-          <frameName>${prefix}_optical_link</frameName>
-          <hackBaseline>0.0</hackBaseline>
+          <frameName>quad${instance}_optical_link</frameName>
           <distortionK1>0.0</distortionK1>
           <distortionK2>0.0</distortionK2>
           <distortionK3>0.0</distortionK3>
           <distortionT1>0.0</distortionT1>
           <distortionT2>0.0</distortionT2>
+          <robotNamespace>/</robotNamespace>
         </plugin>
       </sensor>
     </gazebo>

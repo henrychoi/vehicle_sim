@@ -1,16 +1,16 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(aruco)
-
+# set(ROS_BUILD_TYPE Debug)
 add_compile_options(-std=c++17)
 
 #Packages
 find_package(catkin REQUIRED COMPONENTS	
-	tf cv_bridge roscpp std_msgs image_transport
+	tf cv_bridge tf2 tf2_ros roscpp std_msgs image_transport
 )
 find_package(OpenCV REQUIRED)
 
 #Catkin dependencies
-catkin_package(CATKIN_DEPENDS tf roscpp std_msgs)
+catkin_package(CATKIN_DEPENDS tf2 tf2_ros roscpp std_msgs)
 
 add_executable(aruco src/ArucoNode.cpp)
 target_link_libraries(aruco ${catkin_LIBRARIES} ${OpenCV_LIBS})

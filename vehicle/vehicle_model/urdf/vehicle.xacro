@@ -3,6 +3,7 @@
   <xacro:include filename="$(find vehicle_model)/urdf/body.xacro" />
   <xacro:include filename="$(find vehicle_model)/urdf/wheel.xacro" />
   <xacro:include filename="$(find vehicle_model)/urdf/steering.xacro" />
+  <xacro:include filename="$(find camera_description)/urdf/quad_camera.xacro"/>
   <xacro:include filename="$(find camera_description)/urdf/monocular_camera.xacro"/>
   <xacro:include filename="$(find imu_description)/urdf/imu.xacro"/>
 
@@ -54,14 +55,14 @@
   <!-- ================ sensor to base_link xforms ================ -->
 	<xacro:property name="calibration" value="${load_yaml('$(find vehicle_model)/config/calibration.yaml')}"/>
 
-  <xacro:monocular_camera_macro suffix="cam_rl" parent="base_link" namespace="cam_rl" 
-                                x="${calibration['base_link2camera']['x']}"
-                                y="${calibration['base_link2camera']['y']}"
-                                z="${calibration['base_link2camera']['z']}"
-                                roll="${calibration['base_link2camera']['roll']}"
-                                pitch="${calibration['base_link2camera']['pitch']}"
-                                yaw="${calibration['base_link2camera']['yaw']}"
-                                fps="6" width="1280" height="720" fov="1.6"/>
+  <xacro:quad_camera_macro prefix="up" parent="base_link"
+      x="${calibration['base_link2quad']['x']}"
+      y="${calibration['base_link2quad']['y']}"
+      z="${calibration['base_link2quad']['z']}"
+      roll="${calibration['base_link2quad']['roll']}"
+      pitch="${calibration['base_link2quad']['pitch']}"
+      yaw="${calibration['base_link2quad']['yaw']}"
+      fps="6" width="1280" height="720" fov="1.6"/>
   <xacro:imu_macro suffix="imu" parent="base_link" namespace=""
                    x="${calibration['base_link2imu']['x']}"
                    y="${calibration['base_link2imu']['y']}"

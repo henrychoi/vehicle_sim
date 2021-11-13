@@ -1,0 +1,53 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+  <!-- xacro:property name="pi" value="3.1415926835897931" /-->
+
+  <xacro:include filename="$(find camera_description)/urdf/D430IR.xacro"/>
+
+  <xacro:macro name="quad_camera_macro"
+    params="prefix parent x y z roll pitch yaw fps width height fov">
+    <xacro:property name="len" value="0.2" />
+    <xacro:property name="mass" value="0.1" />
+
+    <joint name="quad_joint" type="fixed">
+      <origin rpy="${roll} ${pitch} ${yaw}" xyz="${x} ${y} ${z}"/>
+      <parent link="${parent}"/>
+      <child  link="quad_link"/>
+    </joint>
+
+    <link name="quad_link"> <!-- the support pole -->
+      <visual>
+        <geometry><cylinder length="${len}" radius="0.02"/></geometry>
+        <origin rpy="0 0 0" xyz="0 0 0"/>
+        <material name="red">
+          <color rgba="${255/255} ${108/255} ${10/255} 1.0"/>
+        </material>
+      </visual>
+      <inertial>
+        <origin rpy="0 0 0" xyz="0 0 0"/>
+        <mass value="${mass}"/>
+        <inertia ixx="0.08" ixy="0.0" ixz="0.0" 
+                    iyy="0.08" iyz="0.0" 
+                        izz="0.01"/>
+      </inertial>
+      <collision>
+        <origin rpy="0 0 0" xyz="0 0 0"/>
+        <geometry><cylinder length="${len}" radius="0.02"/></geometry>
+      </collision>
+    </link>
+
+    <!--xacro:D430IR_macro parent="quad_link" instance="0"
+      yaw="-0.78540" x="0.04" y="-0.04" z="${len/2}"
+      fps="${fps}" width="${width}" height="${height}" fov="${fov}"/>
+    <xacro:D430IR_macro parent="quad_link" instance="1"
+      yaw="0.78540" x="0.04" y="0.04" z="${len/2}"
+      fps="${fps}" width="${width}" height="${height}" fov="${fov}"/>
+    <xacro:D430IR_macro parent="quad_link" instance="2"
+      yaw="2.3562" x="-0.04" y="0.04" z="${len/2}"
+      fps="${fps}" width="${width}" height="${height}" fov="${fov}"/-->
+    <xacro:D430IR_macro parent="quad_link" instance="3"
+      yaw="-2.3562" x="-0.04" y="-0.04" z="${len/2}"
+      fps="${fps}" width="${width}" height="${height}" fov="${fov}"/>
+
+  </xacro:macro>
+</robot>
