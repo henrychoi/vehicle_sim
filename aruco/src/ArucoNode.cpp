@@ -73,7 +73,9 @@ private:
 	bool _show_axis = false;
 
 	Ptr<aruco::GridBoard> _board;
-	Vec3d _rvec[4], _tvec[4];
+	// TODO: reset the pose guesses to the default values after some time
+	Vec3d _rvec[4] // 
+		, _tvec[4];//
 };
 
 /*
@@ -138,7 +140,9 @@ void ArucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 		if(markerIds.size() <= 0
 			|| !aruco::estimatePoseBoard(markerCorners, markerIds, _board
 					, _intrinsic, _distortion, _rvec[camId], _tvec[camId]
-					, cv::SOLVEPNP_P3P)) {
+					// sometimes yields Z axis going INTO the board
+					// , cv::SOLVEPNP_P3P
+					)) {
 			return;
 		}
 
@@ -176,9 +180,10 @@ void ArucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 		static uint32_t sSeq = 0;
 		cam2marker.header.seq = ++sSeq;
 		_cam2marker_pub.publish(cam2marker);
-		// auto elapsed = ros::Time::now() - t0;
-		ROS_INFO("%zd markers in cam %u; pose Q = [%.2f, %.2f, %.2f, %.2f] T = [%.3f, %.3f, %.3f]"
-				// , elapsed.nsec
+		auto elapsed = ros::Time::now() - t0;
+
+		ROS_DEBUG("img took %u ms, %zd markers in cam %u; pose Q = [%.2f, %.2f, %.2f, %.2f] T = [%.3f, %.3f, %.3f]"
+				, elapsed.nsec/1000000
 				, markerIds.size(), camId
 				, cam2marker.pose.orientation.x
 				, cam2marker.pose.orientation.y
@@ -208,8 +213,11 @@ void ArucoPublisher::onCam2Marker(const geometry_msgs::PoseStampedConstPtr& cam2
     try {
     	_tf2_buffer.transform(*cam2marker, quad2marker, "quad_link");
 
-		ROS_INFO("%u.%09u pose in quad_link Q = [%.2f, %.2f, %.2f, %.2f] T = [%.3f, %.3f, %.3f]"
-				, quad2marker.header.stamp.sec, quad2marker.header.stamp.nsec
+		ROS_INFO(//"%u.%09u "
+				"%s pose in quad_link Q = [%.2f, %.2f, %.2f, %.2f] T = [%.3f, %.3f, %.3f]"
+				, cam2marker->header.frame_id.c_str()
+				// confirmed that the camera's timestamps are the same (synchronized capture)
+				//, quad2marker.header.stamp.sec, quad2marker.header.stamp.nsec
 				, quad2marker.pose.orientation.x
 				, quad2marker.pose.orientation.y
 				, quad2marker.pose.orientation.z

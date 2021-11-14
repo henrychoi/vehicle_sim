@@ -36,7 +36,7 @@
       </collision>
     </link>
 
-    <!--xacro:D430IR_macro parent="quad_link" instance="0"
+    <xacro:D430IR_macro parent="quad_link" instance="0"
       yaw="-0.78540" x="0.04" y="-0.04" z="${len/2}"
       fps="${fps}" width="${width}" height="${height}" fov="${fov}"/>
     <xacro:D430IR_macro parent="quad_link" instance="1"
@@ -44,7 +44,7 @@
       fps="${fps}" width="${width}" height="${height}" fov="${fov}"/>
     <xacro:D430IR_macro parent="quad_link" instance="2"
       yaw="2.3562" x="-0.04" y="0.04" z="${len/2}"
-      fps="${fps}" width="${width}" height="${height}" fov="${fov}"/-->
+      fps="${fps}" width="${width}" height="${height}" fov="${fov}"/>
     <xacro:D430IR_macro parent="quad_link" instance="3"
       yaw="-2.3562" x="-0.04" y="-0.04" z="${len/2}"
       fps="${fps}" width="${width}" height="${height}" fov="${fov}"/>
