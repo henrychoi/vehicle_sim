@@ -50,7 +50,7 @@
 
   <node name="aruco" pkg="aruco" type="aruco"
     required="true" output="screen">
-    <param name="show_axis" type="bool" value="true"/>
+    <param name="show_axis" type="bool" value="false"/>
     <param name="Nrows" type="int" value="2"/>
     <param name="Ncols" type="int" value="3"/>
     <param name="length" type="double" value="0.15"/>
@@ -72,6 +72,6 @@
   -->
   <node pkg="tf2_ros" type="static_transform_publisher"
     name="aruco_trailer_broadcaster" 
-    args="-0.3 0.235 0.155  0 0 0 1  aruco trailer"
+    args="-0.3 -0.235 -0.155  0 0 0 1  aruco trailer"
     required="true" output="screen"/>
 </launch>
