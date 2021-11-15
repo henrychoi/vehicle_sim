@@ -11,31 +11,36 @@
 #include <std_msgs/String.h>
 #include <std_msgs/Int32.h>
 
+#include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
 #include <image_transport/image_transport.h>
-#include <tf/transform_broadcaster.h>
-#include <cv_bridge/cv_bridge.h>
+#include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
+#include <tf2_ros/message_filter.h>
+#include <message_filters/subscriber.h>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
 using namespace cv;
 using namespace std;
 
 class MarucoPublisher {
+	typedef MarucoPublisher Self;
 public:
-	MarucoPublisher(const char* suffix);
+	MarucoPublisher();
 
 private:
 	void onFrame(const sensor_msgs::ImageConstPtr& msg);
+	void onCam2Marker(const geometry_msgs::PoseStampedConstPtr& p);
 	void onCameraInfo(const sensor_msgs::CameraInfo &msg);
 
-    ros::NodeHandle _nh;
-	string _name_prefix;
-	string link_name = "aruco_";
+    ros::NodeHandle _nh, _ph;
 
 	/**
 	 * Camera _intrinsic matrix pre initialized with _intrinsic values for the test camera.
 	 */
 	double data_calibration[9] = {
-		640, 0, 640, 
+		640, 0, 360, 
 		0, 	640, 360,
 		0, 0, 1
 	};
@@ -48,10 +53,16 @@ private:
 	Mat _distortion = cv::Mat(1, 5, CV_64F, data_distortion);
 
 	image_transport::ImageTransport _it;
-	tf::TransformBroadcaster broadcaster;
-	image_transport::Publisher pub_debug_img;
-	image_transport::Subscriber sub_camera;
-	ros::Subscriber sub_camera_info;
+	image_transport::Publisher debug_img_pub;
+	image_transport::Subscriber _image0_sub, _image1_sub, _image2_sub, _image3_sub;
+	ros::Subscriber _cal1_sub;
+
+	tf2_ros::TransformBroadcaster _br;
+	tf2_ros::Buffer _tf2_buffer;
+	tf2_ros::TransformListener _tf2_listener;
+	ros::Publisher _cam2marker_pub;
+	message_filters::Subscriber<geometry_msgs::PoseStamped> _cam2marker_sub;
+	tf2_ros::MessageFilter<geometry_msgs::PoseStamped> _tf2_filter;
 
 	/**
 	 * Flag to check if _intrinsic parameters were received.
@@ -62,7 +73,9 @@ private:
 	bool _show_axis = false;
 
 	Ptr<aruco::GridBoard> _board;
-	Vec3d _rvec, _tvec;
+	// TODO: reset the pose guesses to the default values after some time
+	Vec3d _rvec[4] // 
+		, _tvec[4];//
 };
 
 /*
@@ -104,42 +117,41 @@ static void convert_frame_to_message(const cv::Mat& frame,
  * This callback is used to process received images and publish messages with camera position data if any.
  */
 void MarucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
-	// ROS_INFO("onFrame");// %u.%09u", msg->header.stamp.sec, msg->header.stamp.nsec);
+	// ROS_INFO("onFrame %s", msg->header.frame_id.c_str());
+	int camId = msg->header.frame_id[4] - '0';
+	if (camId > 3) {
+		ROS_INFO("Image from unexpected camera frame %s", msg->header.frame_id.c_str());
+		return;
+	}
 	if (!_calibrated) {
-		ROS_INFO("camera not yet calibrated");
+		ROS_INFO("camera not yet calibrated camera frame %s", msg->header.frame_id.c_str());
 		return;
 	}
 	try {
 		auto t0 = ros::Time::now();
-		Mat frame = cv_bridge::toCvShare(msg, "bgr8")->image;
+		Mat frame = cv_bridge::toCvShare(msg, "mono8")->image;
 		vector<int> markerIds;
 		vector<vector<Point2f>> markerCorners;
 		aruco::detectMarkers(frame, _board->dictionary, markerCorners, markerIds
 			// optional args
 			// detector parameters, rejectedImgPoints, _intrinsic, _distortion
 			);
+		// Vec3d _rvec, _tvec;
 		if(markerIds.size() <= 0
 			|| !aruco::estimatePoseBoard(markerCorners, markerIds, _board
-					, _intrinsic, _distortion, _rvec, _tvec)) {
+					, _intrinsic, _distortion, _rvec[camId], _tvec[camId]
+					// sometimes yields Z axis going INTO the board
+					// , cv::SOLVEPNP_P3P
+					)) {
 			return;
 		}
-		float angle = sqrt(_rvec[0]*_rvec[0] + _rvec[1]*_rvec[1] + _rvec[2]*_rvec[2]);
-		tf::Vector3 axis(_rvec[2], -_rvec[0], _rvec[1]); // CV --> ROS
-		tf::Quaternion q(axis, angle);
-		auto elapsed = ros::Time::now() - t0;
-		ROS_INFO("%d nsec; %zd markers; Q = [%.2f, %.2f, %.2f, %.2f] T = [%.3f, %.3f, %.3f]"
-				, elapsed.nsec, markerIds.size()
-				, q[0], q[1], q[2], q[3], _tvec[0], _tvec[1], _tvec[2]);
-		if (_show_axis) { // Show the board frame
-		  	cv::aruco::drawAxis(frame, _intrinsic, _distortion, _rvec, _tvec, 0.8);
-			auto img = boost::make_shared<sensor_msgs::Image>();
-			convert_frame_to_message(frame, img);
-			// preserve the timestamp from the image frame
-			img->header.stamp = msg->header.stamp;
-			pub_debug_img.publish(img);
-		}
 
-#if 0
+		float angle = sqrt(_rvec[camId][0]*_rvec[camId][0]
+						+ _rvec[camId][1]*_rvec[camId][1]
+						+ _rvec[camId][2]*_rvec[camId][2]);
+		float sina2 = sin(0.5f * angle);
+		float scale = sina2 / angle;
+
 		/* Publish TF note the flipping from CV --> ROS
 			Units should be in meters and radians. The OpenCV uses
 			Z+ to represent depth, Y- for height and X+ for lateral, but ROS uses X+ for depth (axial), Z+ for height, and
@@ -154,41 +166,76 @@ void MarucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 		*    | /                 |    | /
 		*    |/                  |    |/
 		*    O-------------> Y-  |    O-------------> X+
-		 */
-		tf::Transform transform;
-		transform.setOrigin(tf::Vector3(
-			camera_position.at<double>(2, 0) // CV Z
-			, -camera_position.at<double>(0, 0) // -CV X
-			, -camera_position.at<double>(1, 0) // -CV Y
-			) ); 
-		tf::Quaternion q;
-		// geometry_msgs::Point message_position, message_rotation;
-		// Convert Euler angles to quaternion
-		double ex = camera_rotation.at<double>(2, 0)
-			, ey = -camera_rotation.at<double>(0, 0)
-			, ez = -camera_rotation.at<double>(1, 0)
-			, angle = sqrt(ex*ex + ey*ey + ez*ez);
-		if(angle > 0.0) {
-			auto sa = sin(angle/2.0);
-			q[0] = ex * sa/angle;
-			q[1] = ey * sa/angle;
-			q[2] = ez * sa/angle;
-			q[3] = cos(angle/2.0);
-		} else { //To avoid illegal expressions
-			ROS_ERROR("Failed to convert Euler(%.2f,%.2f,%.2f) --> quat"
-			 	, ex, ey, ez);
-			q[0] = q[1] = q[2] = 0.0;
-			q[3] = 1.0;
+		*/
+		geometry_msgs::PoseStamped cam2marker;
+		cam2marker.pose.orientation.x =  _rvec[camId][2] * scale;
+		cam2marker.pose.orientation.y = -_rvec[camId][0] * scale;
+		cam2marker.pose.orientation.z = -_rvec[camId][1] * scale;
+		cam2marker.pose.orientation.w = cos(0.5f * angle);
+		cam2marker.pose.position.x =  _tvec[camId][2];
+		cam2marker.pose.position.y = -_tvec[camId][0];
+		cam2marker.pose.position.z = -_tvec[camId][1];
+		cam2marker.header.stamp = msg->header.stamp;
+		cam2marker.header.frame_id = format("quad%d_link", camId);
+		static uint32_t sSeq = 0;
+		cam2marker.header.seq = ++sSeq;
+		_cam2marker_pub.publish(cam2marker);
+		auto elapsed = ros::Time::now() - t0;
+
+		ROS_DEBUG("img took %u ms, %zd markers in cam%u; pose Q = [%.2f, %.2f, %.2f, %.2f] T = [%.3f, %.3f, %.3f]"
+				, elapsed.nsec/1000000
+				, markerIds.size(), camId
+				, cam2marker.pose.orientation.x
+				, cam2marker.pose.orientation.y
+				, cam2marker.pose.orientation.z
+				, cam2marker.pose.orientation.w
+				, cam2marker.pose.position.x
+				, cam2marker.pose.position.y
+				, cam2marker.pose.position.z);
+
+		if (_show_axis) { // Show the board frame
+		  	cv::aruco::drawAxis(frame, _intrinsic, _distortion
+			  	, _rvec[camId], _tvec[camId], 0.8);
+			auto img = boost::make_shared<sensor_msgs::Image>();
+			convert_frame_to_message(frame, img);
+			// preserve the timestamp from the image frame
+			img->header.stamp = msg->header.stamp;
+			debug_img_pub.publish(img);
 		}
-		transform.setRotation(q);
-		broadcaster.sendTransform(tf::StampedTransform(transform
-			, msg->header.stamp, "base_link", link_name));
-#endif
 	} catch(cv_bridge::Exception& e) {
-		ROS_ERROR("Error getting image data");
+		ROS_ERROR("Cannot get image");
 	}
 }
 
+void MarucoPublisher::onCam2Marker(const geometry_msgs::PoseStampedConstPtr& cam2marker) {
+	// ROS_INFO("onPose with frame %s", cam2marker->header.frame_id.c_str());
+    geometry_msgs::PoseStamped quad2marker;
+    try {
+    	_tf2_buffer.transform(*cam2marker, quad2marker, "quad_link");
+		geometry_msgs::TransformStamped transformStamped;
+		transformStamped.header = quad2marker.header;
+		transformStamped.child_frame_id = "aruco";
+		transformStamped.transform.translation.x = quad2marker.pose.position.x;
+		transformStamped.transform.translation.y = quad2marker.pose.position.y;
+		transformStamped.transform.translation.z = quad2marker.pose.position.z;
+		transformStamped.transform.rotation = quad2marker.pose.orientation;
+		_br.sendTransform(transformStamped);
+		ROS_INFO(//"%u.%09u "
+				"%s pose in quad_link Q = [%.2f, %.2f, %.2f, %.2f] T = [%.3f, %.3f, %.3f]"
+				, cam2marker->header.frame_id.c_str()
+				// confirmed that the camera's timestamps are the same (synchronized capture)
+				//, quad2marker.header.stamp.sec, quad2marker.header.stamp.nsec
+				, quad2marker.pose.orientation.x
+				, quad2marker.pose.orientation.y
+				, quad2marker.pose.orientation.z
+				, quad2marker.pose.orientation.w
+				, quad2marker.pose.position.x
+				, quad2marker.pose.position.y
+				, quad2marker.pose.position.z);
+	} catch (tf2::TransformException &ex) {
+  	    ROS_ERROR("Transform failure %s\n", ex.what());
+  	}
+}
 /**
  * On camera info callback.
  * Used to receive camera _intrinsic parameters.
@@ -204,7 +251,7 @@ void MarucoPublisher::onCameraInfo(const sensor_msgs::CameraInfo &msg) {
 		_distortion.at<double>(0, i) = msg.D[i];
 
 	if(_show_axis) {
-		cout << "Camera _intrinsic param received" << endl;
+		ROS_INFO("frame %s instrinsic received", msg.header.frame_id.c_str());
 		cout << "Intrinsic: " << _intrinsic << endl;
 		cout << "Distortion: " << _distortion << endl;
 	}
@@ -232,28 +279,28 @@ void stringToDoubleArray(string data, double* values, unsigned int count, string
 	}
 }
 
-MarucoPublisher::MarucoPublisher(const char* suffix)
-: _nh("")
-, _name_prefix(string("aruco_") + suffix + "/")
+MarucoPublisher::MarucoPublisher()
+: _nh("aruco"), _ph("~")
 , _it(_nh)
-, pub_debug_img(_it.advertise(_name_prefix +"debug", 1))
-, sub_camera(_it.subscribe(string("cam_") + suffix + "/image_raw"
-	, 1, &MarucoPublisher::onFrame, this))
-, sub_camera_info(_nh.subscribe(string("cam_") + suffix + "/camera_info"
-	, 1 , &MarucoPublisher::onCameraInfo, this))
+, debug_img_pub(_it.advertise("debug", 1))
+, _image0_sub(_it.subscribe("quad0/image_raw", 1, &Self::onFrame, this))
+, _image1_sub(_it.subscribe("quad1/image_raw", 1, &Self::onFrame, this))
+, _image2_sub(_it.subscribe("quad2/image_raw", 1, &Self::onFrame, this))
+, _image3_sub(_it.subscribe("quad3/image_raw", 1, &Self::onFrame, this))
+, _cal1_sub(_nh.subscribe("quad3/camera_info", 1 , &Self::onCameraInfo, this))
+, _cam2marker_pub(_ph.advertise<geometry_msgs::PoseStamped>("cam2marker", 1, true))
+, _tf2_listener(_tf2_buffer)
+, _tf2_filter(_cam2marker_sub, _tf2_buffer, "quad_link", 10, 0)
 {
-	const auto ns = _nh.getNamespace();
-	link_name += suffix;
-
 	int Nrows, Ncols;
 	float length, gap;
 
-	assert(_nh.param(_name_prefix + "Nrows", Nrows, 1));
-	assert(_nh.param(_name_prefix + "Ncols", Ncols, 1));
-	assert(_nh.param(_name_prefix + "length", length, 0.15f));
-	assert(_nh.param(_name_prefix + "gap", gap, 0.01f));
-	assert(_nh.param(_name_prefix + "show_axis", _show_axis, false));
-	_nh.param(_name_prefix + "calibrated", _calibrated, false);
+	assert(_nh.param("Nrows", Nrows, 1));
+	assert(_nh.param("Ncols", Ncols, 1));
+	assert(_nh.param("length", length, 0.15f));
+	assert(_nh.param("gap", gap, 0.01f));
+	assert(_nh.param("show_axis", _show_axis, false));
+	_nh.param("calibrated", _calibrated, false);
 
 	// assert(_show_axis);
 
@@ -292,18 +339,17 @@ MarucoPublisher::MarucoPublisher(const char* suffix)
 		_calibrated = true;
 	}
 #endif
-	auto dict = aruco::getPredefinedDictionary(aruco::DICT_4X4_50);
+
+	_cam2marker_sub.subscribe(_ph, "cam2marker", 10);
+  	_tf2_filter.registerCallback(boost::bind(&Self::onCam2Marker, this, _1));
+  
+  	auto dict = aruco::getPredefinedDictionary(aruco::DICT_4X4_50);
 	_board = aruco::GridBoard::create(Ncols, Nrows, length, gap, dict);
 }
 
 int main(int argc, char **argv) {
-	if (argc < 2) {
-		fprintf(stderr, "aruco camera location {fl, fr, rl, rr} required");
-		return -1;
-	}
-	argc = 0;
-	ros::init(argc, NULL, string("aruco_") + argv[1]);
-	MarucoPublisher pub(argv[1]);
+	ros::init(argc, argv, "aruco");
+	MarucoPublisher pub;
 	ros::spin();
 
 	return 0;
