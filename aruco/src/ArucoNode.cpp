@@ -1,5 +1,7 @@
 // #include <iostream>
 #include <string>
+#include <deque>
+// #include <queue>
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -14,6 +16,7 @@
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
 #include <image_transport/image_transport.h>
+#include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
@@ -73,9 +76,24 @@ private:
 	bool _show_axis = false;
 
 	Ptr<aruco::GridBoard> _board;
-	// TODO: reset the pose guesses to the default values after some time
-	Vec3d _rvec[4] // 
-		, _tvec[4];//
+
+	struct _CamState {
+		Vec3d rvec, tvec;
+	} camState_[4];
+	struct _DetectionScore {
+		int camId;
+		vector<int> markerIds;
+	};
+	deque<_DetectionScore> detectedQ_; // will be at most 2 elements long
+
+
+	struct _DetectionResult {
+		bool valid;
+		size_t score;
+		geometry_msgs::Point T;
+		tf2::Quaternion Q;
+	} other_;
+	// queue<_DetectionResult> resQ_;
 };
 
 /*
@@ -136,19 +154,26 @@ void ArucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 			// optional args
 			// detector parameters, rejectedImgPoints, _intrinsic, _distortion
 			);
-		// Vec3d _rvec, _tvec;
 		if(markerIds.size() <= 0
 			|| !aruco::estimatePoseBoard(markerCorners, markerIds, _board
-					, _intrinsic, _distortion, _rvec[camId], _tvec[camId]
-					// sometimes yields Z axis going INTO the board
+					, _intrinsic, _distortion
+					, camState_[camId].rvec, camState_[camId].tvec
+					// sometimes yields Z axis going INTO the board. so can't use this
 					// , cv::SOLVEPNP_P3P
 					)) {
 			return;
 		}
+		// Record the latest valid board observation time
+		detectedQ_.push_back({camId, markerIds});
+		auto elapsed = ros::Time::now() - t0;
+		ROS_DEBUG("%zd markers in cam%u; R = [%.2f, %.2f, %.2f] T = [%.3f, %.3f, %.3f]"
+				, markerIds.size(), camId
+				, camState_[camId].rvec[0], camState_[camId].rvec[1], camState_[camId].rvec[2]
+				, camState_[camId].tvec[0], camState_[camId].tvec[1], camState_[camId].tvec[2]);
 
-		float angle = sqrt(_rvec[camId][0]*_rvec[camId][0]
-						+ _rvec[camId][1]*_rvec[camId][1]
-						+ _rvec[camId][2]*_rvec[camId][2]);
+		float angle = sqrt(camState_[camId].rvec[0] * camState_[camId].rvec[0]
+						+ camState_[camId].rvec[1] * camState_[camId].rvec[1]
+						+ camState_[camId].rvec[2] * camState_[camId].rvec[2]);
 		float sina2 = sin(0.5f * angle);
 		float scale = sina2 / angle;
 
@@ -168,34 +193,30 @@ void ArucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 		*    O-------------> Y-  |    O-------------> X+
 		*/
 		geometry_msgs::PoseStamped cam2marker;
-		cam2marker.pose.orientation.x =  _rvec[camId][2] * scale;
-		cam2marker.pose.orientation.y = -_rvec[camId][0] * scale;
-		cam2marker.pose.orientation.z = -_rvec[camId][1] * scale;
+		cam2marker.pose.orientation.x =  camState_[camId].rvec[2] * scale;
+		cam2marker.pose.orientation.y = -camState_[camId].rvec[0] * scale;
+		cam2marker.pose.orientation.z = -camState_[camId].rvec[1] * scale;
 		cam2marker.pose.orientation.w = cos(0.5f * angle);
-		cam2marker.pose.position.x =  _tvec[camId][2];
-		cam2marker.pose.position.y = -_tvec[camId][0];
-		cam2marker.pose.position.z = -_tvec[camId][1];
+		cam2marker.pose.position.x =  camState_[camId].tvec[2];
+		cam2marker.pose.position.y = -camState_[camId].tvec[0];
+		cam2marker.pose.position.z = -camState_[camId].tvec[1];
 		cam2marker.header.stamp = msg->header.stamp;
 		cam2marker.header.frame_id = format("quad%d_link", camId);
 		static uint32_t sSeq = 0;
 		cam2marker.header.seq = ++sSeq;
-		_cam2marker_pub.publish(cam2marker);
-		auto elapsed = ros::Time::now() - t0;
 
-		ROS_DEBUG("img took %u ms, %zd markers in cam%u; pose Q = [%.2f, %.2f, %.2f, %.2f] T = [%.3f, %.3f, %.3f]"
-				, elapsed.nsec/1000000
-				, markerIds.size(), camId
+		// save away the state of each camera
+		_cam2marker_pub.publish(cam2marker);
+
+		ROS_DEBUG("cam%u markers pose Q = [%.2f, %.2f, %.2f, %.2f]", camId
 				, cam2marker.pose.orientation.x
 				, cam2marker.pose.orientation.y
 				, cam2marker.pose.orientation.z
-				, cam2marker.pose.orientation.w
-				, cam2marker.pose.position.x
-				, cam2marker.pose.position.y
-				, cam2marker.pose.position.z);
+				, cam2marker.pose.orientation.w);
 
 		if (_show_axis) { // Show the board frame
 		  	cv::aruco::drawAxis(frame, _intrinsic, _distortion
-			  	, _rvec[camId], _tvec[camId], 0.8);
+			  	, camState_[camId].rvec, camState_[camId].tvec, 0.8);
 			auto img = boost::make_shared<sensor_msgs::Image>();
 			convert_frame_to_message(frame, img);
 			// preserve the timestamp from the image frame
@@ -209,29 +230,92 @@ void ArucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 
 void ArucoPublisher::onCam2Marker(const geometry_msgs::PoseStampedConstPtr& cam2marker) {
 	// ROS_INFO("onPose with frame %s", cam2marker->header.frame_id.c_str());
+	int camId = cam2marker->header.frame_id[4] - '0';
     geometry_msgs::PoseStamped quad2marker;
     try {
     	_tf2_buffer.transform(*cam2marker, quad2marker, "quad_link");
-		geometry_msgs::TransformStamped transformStamped;
-		transformStamped.header = quad2marker.header;
-		transformStamped.child_frame_id = "aruco";
-		transformStamped.transform.translation.x = quad2marker.pose.position.x;
-		transformStamped.transform.translation.y = quad2marker.pose.position.y;
-		transformStamped.transform.translation.z = quad2marker.pose.position.z;
-		transformStamped.transform.rotation = quad2marker.pose.orientation;
-		_br.sendTransform(transformStamped);
-		ROS_INFO(//"%u.%09u "
-				"%s pose in quad_link Q = [%.2f, %.2f, %.2f, %.2f] T = [%.3f, %.3f, %.3f]"
-				, cam2marker->header.frame_id.c_str()
+		tf2::Quaternion Q(quad2marker.pose.orientation.x
+						, quad2marker.pose.orientation.y
+						, quad2marker.pose.orientation.z
+						, quad2marker.pose.orientation.w);
+		{
+			const auto axis = Q.getAxis();
+			ROS_DEBUG("cam %d pose in quad_link Q = [%.2f, %.2f, %.2f, %.2f] T = [%.3f, %.3f, %.3f]"
+				, camId
 				// confirmed that the camera's timestamps are the same (synchronized capture)
 				//, quad2marker.header.stamp.sec, quad2marker.header.stamp.nsec
-				, quad2marker.pose.orientation.x
-				, quad2marker.pose.orientation.y
-				, quad2marker.pose.orientation.z
-				, quad2marker.pose.orientation.w
+				// , quad2marker.pose.orientation.x
+				// , quad2marker.pose.orientation.y
+				// , quad2marker.pose.orientation.z
+				// , quad2marker.pose.orientation.w
+				, axis[0], axis[1], axis[2], Q.getW()
 				, quad2marker.pose.position.x
 				, quad2marker.pose.position.y
 				, quad2marker.pose.position.z);
+		}
+		switch (detectedQ_.size()) {
+			case 2: { // I shouldn't finish calculation; save away the result
+				_DetectionScore& det = (detectedQ_.front().camId == camId)
+					? detectedQ_.front() : detectedQ_.back();
+				other_.score = det.markerIds.size();
+				other_.T = quad2marker.pose.position;
+				other_.Q = Q;
+				other_.valid = true;
+				if (detectedQ_.front().camId == camId) {
+					detectedQ_.pop_front();
+				} else {
+					detectedQ_.pop_back();
+				}
+			}	break;
+
+			case 1: { // average the current result with one stored in other_
+				_DetectionScore& det = detectedQ_.front();
+				auto score = static_cast<float>(det.markerIds.size());
+				// pose from THIS camera
+				auto T = quad2marker.pose.position;
+				auto Qave = Q;
+				if (other_.valid) { // weighted average with other camera's estimate
+					auto weight = 1.f / (score + other_.score);
+
+					// weighted average of the 2 translations
+					T.x = weight * (score * T.x + other_.score * other_.T.x);
+					T.y = weight * (score * T.y + other_.score * other_.T.y);
+					T.z = weight * (score * T.z + other_.score * other_.T.z);
+					Qave = other_.Q.slerp(Q, score*weight);
+				}
+				detectedQ_.clear();
+				other_.valid = false; // consumed result
+
+				auto axis = Qave.getAxis();
+			
+				geometry_msgs::TransformStamped transformStamped;
+				transformStamped.header = quad2marker.header;
+				transformStamped.child_frame_id = "aruco";
+				transformStamped.transform.translation.x = T.x;
+				transformStamped.transform.translation.y = T.y;
+				transformStamped.transform.translation.z = T.z;
+				transformStamped.transform.rotation.x = axis[0];
+				transformStamped.transform.rotation.y = axis[1];
+				transformStamped.transform.rotation.z = axis[2];
+				transformStamped.transform.rotation.w = Qave.getW();
+				_br.sendTransform(transformStamped);
+
+				ROS_INFO("pose in quad_link Q = [%.2f, %.2f, %.2f, %.2f] T = [%.3f, %.3f, %.3f]"
+						, transformStamped.transform.rotation.x
+						, transformStamped.transform.rotation.y
+						, transformStamped.transform.rotation.z
+						, transformStamped.transform.rotation.w
+						, transformStamped.transform.translation.x
+						, transformStamped.transform.translation.y
+						, transformStamped.transform.translation.z);
+			}	break;
+			default:
+				ROS_ERROR("Precondition violation: detectedQ_ size %zd ! 1 or 2"
+					, detectedQ_.size());
+				detectedQ_.clear();
+		}
+
+
 	} catch (tf2::TransformException &ex) {
   	    ROS_ERROR("Transform failure %s\n", ex.what());
   	}

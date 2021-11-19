@@ -50,14 +50,14 @@
 
   <node name="aruco" pkg="aruco" type="aruco"
     required="true" output="screen">
-    <param name="show_axis" type="bool" value="false"/>
+    <param name="show_axis" type="bool" value="true"/>
     <param name="Nrows" type="int" value="2"/>
     <param name="Ncols" type="int" value="3"/>
     <param name="length" type="double" value="0.15"/>
     <param name="gap" type="double" value="0.01"/>
 
-    <remap from="/aruco/quad1/image_raw" to="/quad1/image_raw"/>
-    <remap from="/aruco/quad1/camera_info" to="/quad1/camera_info"/>
+    <remap from="/aruco/quad0/image_raw" to="/quad0/image_raw"/>
+    <remap from="/aruco/quad0/camera_info" to="/quad0/camera_info"/>
     <remap from="/aruco/quad1/image_raw" to="/quad1/image_raw"/>
     <remap from="/aruco/quad1/camera_info" to="/quad1/camera_info"/>
     <remap from="/aruco/quad2/image_raw" to="/quad2/image_raw"/>
@@ -68,10 +68,12 @@
 
   <!-- have to add the static transform in THIS direction; the parent
   link is what the algorithm decides the ARUCO board is at (whether the
-  center or the corner), but the child is the center of the trailer
+  center or the corner), but the child is the center of the trailer.  Note
+  the ARUCO board is on the -y-z axes plane because of the OpenCV to ROS mapping.
+  See the axes explanation in ArucoNode.cpp.
   -->
   <node pkg="tf2_ros" type="static_transform_publisher"
     name="aruco_trailer_broadcaster" 
-    args="-0.3 -0.235 -0.155  0 0 0 1  aruco trailer"
+    args="-0.3 -0.235 -0.155  1 0 0 0  aruco trailer"
     required="true" output="screen"/>
 </launch>
