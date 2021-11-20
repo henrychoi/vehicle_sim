@@ -10,8 +10,8 @@
 
 #include <ros/ros.h>
 #include <ros/console.h>
-#include <std_msgs/String.h>
-#include <std_msgs/Int32.h>
+// #include <std_msgs/String.h>
+// #include <std_msgs/Int32.h>
 
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
@@ -234,10 +234,8 @@ void ArucoPublisher::onCam2Marker(const geometry_msgs::PoseStampedConstPtr& cam2
     geometry_msgs::PoseStamped quad2marker;
     try {
     	_tf2_buffer.transform(*cam2marker, quad2marker, "quad_link");
-		tf2::Quaternion Q(quad2marker.pose.orientation.x
-						, quad2marker.pose.orientation.y
-						, quad2marker.pose.orientation.z
-						, quad2marker.pose.orientation.w);
+		tf2::Quaternion Q;
+		tf2::fromMsg(quad2marker.pose.orientation, Q);
 		{
 			const auto axis = Q.getAxis();
 			ROS_DEBUG("cam %d pose in quad_link Q = [%.2f, %.2f, %.2f, %.2f] T = [%.3f, %.3f, %.3f]"
@@ -286,21 +284,19 @@ void ArucoPublisher::onCam2Marker(const geometry_msgs::PoseStampedConstPtr& cam2
 				detectedQ_.clear();
 				other_.valid = false; // consumed result
 
-				auto axis = Qave.getAxis();
-			
 				geometry_msgs::TransformStamped transformStamped;
 				transformStamped.header = quad2marker.header;
 				transformStamped.child_frame_id = "aruco";
 				transformStamped.transform.translation.x = T.x;
 				transformStamped.transform.translation.y = T.y;
 				transformStamped.transform.translation.z = T.z;
-				transformStamped.transform.rotation.x = axis[0];
-				transformStamped.transform.rotation.y = axis[1];
-				transformStamped.transform.rotation.z = axis[2];
-				transformStamped.transform.rotation.w = Qave.getW();
+				transformStamped.transform.rotation.x = Qave.x();
+				transformStamped.transform.rotation.y = Qave.y();
+				transformStamped.transform.rotation.z = Qave.z();
+				transformStamped.transform.rotation.w = Qave.w();
 				_br.sendTransform(transformStamped);
 
-				ROS_INFO("pose in quad_link Q = [%.2f, %.2f, %.2f, %.2f] T = [%.3f, %.3f, %.3f]"
+				ROS_DEBUG("pose in quad_link Q = [%.2f, %.2f, %.2f, %.2f] T = [%.3f, %.3f, %.3f]"
 						, transformStamped.transform.rotation.x
 						, transformStamped.transform.rotation.y
 						, transformStamped.transform.rotation.z
@@ -309,6 +305,7 @@ void ArucoPublisher::onCam2Marker(const geometry_msgs::PoseStampedConstPtr& cam2
 						, transformStamped.transform.translation.y
 						, transformStamped.transform.translation.z);
 			}	break;
+
 			default:
 				ROS_ERROR("Precondition violation: detectedQ_ size %zd ! 1 or 2"
 					, detectedQ_.size());

@@ -48,8 +48,7 @@
     </node>
   </group>
 
-  <node name="aruco" pkg="aruco" type="aruco"
-    required="true" output="screen">
+  <node name="aruco" pkg="aruco" type="aruco" required="true" output="screen">
     <param name="show_axis" type="bool" value="true"/>
     <param name="Nrows" type="int" value="2"/>
     <param name="Ncols" type="int" value="3"/>
@@ -64,6 +63,9 @@
     <remap from="/aruco/quad2/camera_info" to="/quad2/camera_info"/>
     <remap from="/aruco/quad3/image_raw" to="/quad3/image_raw"/>
     <remap from="/aruco/quad3/camera_info" to="/quad3/camera_info"/>
+  </node>
+
+  <node name="perf" pkg="perf" type="perf" required="true" output="screen">
   </node>
 
   <!-- have to add the static transform in THIS direction; the parent
