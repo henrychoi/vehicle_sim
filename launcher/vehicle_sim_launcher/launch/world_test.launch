@@ -38,8 +38,8 @@
     <node name="vehicle_input_subscriber" pkg="vehicle_sim_interface"
       type="vehicle_input_subscriber" respawn="false"
           output="screen">
-      <remap from="cmd_vel" to="/cmd_vel"/>
-      <remap from="twist_cmd" to="/twist_cmd"/>
+      <remap from="/dbw/cmd_vel" to="cmd_vel"/>
+      <remap from="twist_cmd" to="twist_cmd"/>
     </node>
 
     <node name="vehicle_info_publisher" pkg="vehicle_sim_interface"
@@ -65,9 +65,6 @@
     <remap from="/aruco/quad3/camera_info" to="/quad3/camera_info"/>
   </node>
 
-  <node name="perf" pkg="perf" type="perf" required="true" output="screen">
-  </node>
-
   <!-- have to add the static transform in THIS direction; the parent
   link is what the algorithm decides the ARUCO board is at (whether the
   center or the corner), but the child is the center of the trailer.  Note
@@ -78,4 +75,36 @@
     name="aruco_trailer_broadcaster" 
     args="-0.3 -0.235 -0.155  1 0 0 0  aruco trailer"
     required="true" output="screen"/>
+
+  <!-- Down sample the Gazebo link_states because it is a flood-->
+  <node name="throttle_gazebo" pkg="topic_tools" type="throttle"
+    args="messages /gazebo/link_states 1.0 /truth/link_states" />
+
+  <!-- Compare pose estimate against the Gazebo generated ground truth -->
+  <node name="perf" pkg="perf" type="perf" required="true" output="screen">
+  </node>
+
+  <!-- Xbox 360 controller input -->
+  <node name="joy_node" pkg="joy" type="joy_node">
+    <param name="deadzone" type="double" value="0.05"/>
+    <!-- Allows deadzone to be smooth -->
+    <param name="default_trig_val" type="bool" value="true"/>
+
+    <!-- param name="autorepeat_rate" value="0"/>
+    <param name="coalesce_interval" value="0.01"/>
+    <param name="sticky_buttons" value="false"/-->
+  </node>
+
+  <node name="throttle_joy" pkg="topic_tools" type="throttle"
+    args="messages /joy 16 /dbw/joy" />
+
+  <!-- drive by wire: translate to twist_cmd -->
+  <node name="dbw" pkg="dbw" type="dbw" required="true" output="screen">
+    <param name="steer_axis" type="int" value="0"/>
+    <param name="throttle_axis" type="int" value="1"/>
+    <param name="deadman_btn" type="int" value="4"/> <!-- LR button-->>
+    <param name="steer_gain" type="double" value="1"/>
+    <param name="throttle_gain" type="double" value="1"/>
+  </node>
+
 </launch>

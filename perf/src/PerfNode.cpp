@@ -27,13 +27,13 @@ public:
 
 PerfNode::PerfNode()
 : nh_("perf")
-, gazebo_sub_(nh_.subscribe("/gazebo/link_states", 1,
+, gazebo_sub_(nh_.subscribe("/truth/link_states", 1,
 	&Self::onGazeboLinkStates, this))
 , tf2_listener_(buffer_)
 {
 }
 
-void PerfNode::onGazeboLinkStates(const gazebo_msgs::LinkStates &links) {
+void PerfNode::onGazeboLinkStates(const gazebo_msgs::LinkStates &links) {\
 	static ros::Time sPrevTime = ros::Time::now();
 	const auto now = ros::Time::now();
 	if ((now - sPrevTime).sec <= 0) {

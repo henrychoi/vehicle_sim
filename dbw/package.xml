@@ -1,0 +1,22 @@
+<?xml version="1.0"?>
+<package>
+	<name>dbw</name>
+	<version>1.1.0</version>
+	<description>DBW with joystick</description>
+	<maintainer email="henry.omd@gmail.com">Henry</maintainer>
+	<license>MIT</license>
+
+	<buildtool_depend>catkin</buildtool_depend>
+	
+	<build_depend>roscpp</build_depend>
+	<run_depend>roscpp</run_depend>
+
+	<build_depend>std_msgs</build_depend>
+	<run_depend>std_msgs</run_depend>
+
+	<build_depend>sensor_msgs</build_depend>
+	<run_depend>sensor_msgs</run_depend>
+
+	<build_depend>geometry_msgs</build_depend>
+	<run_depend>geometry_msgs</run_depend>
+</package>
