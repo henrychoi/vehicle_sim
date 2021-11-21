@@ -21,7 +21,7 @@
     args="-param robot_description -urdf -model autoware_gazebo" />
 
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
-  <node name="rqt_robot_steering" pkg="rqt_robot_steering" type="rqt_robot_steering" />
+  <!--node name="rqt_robot_steering" pkg="rqt_robot_steering" type="rqt_robot_steering" /-->
 
   <group ns="$(arg ns)">
     <!-- Load joint controller configurations from YAML file to parameter server -->
@@ -102,9 +102,9 @@
   <node name="dbw" pkg="dbw" type="dbw" required="true" output="screen">
     <param name="steer_axis" type="int" value="0"/>
     <param name="throttle_axis" type="int" value="1"/>
-    <param name="deadman_btn" type="int" value="4"/> <!-- LR button-->>
-    <param name="steer_gain" type="double" value="0.7"/>
-    <param name="throttle_gain" type="double" value="0.2"/>
+    <param name="deadman_btn" type="int" value="4"/> <!-- LR button-->
+    <param name="steer_gain" type="double" value="0.5"/>
+    <param name="throttle_gain" type="double" value="2"/>
   </node>
 
 </launch>

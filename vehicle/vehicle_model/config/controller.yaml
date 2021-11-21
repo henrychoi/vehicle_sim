@@ -1,20 +1,26 @@
 joint_state_controller:
+  # reads all joint positions and publish them on to "/joint_states".
+  # This controller does not send any command to the actuators
   type: joint_state_controller/JointStateController
   publish_rate: 50  
 
 steering_left_front_position_controller:
-  type: effort_controllers/JointPositionController
+  type: position_controllers/JointPositionController
   joint: steering_left_front_joint
-  pid: {p: 2000.0, i: 0.01, d: 10.0}
+  # The input position value is simply forwarded as output command
+  # to the joint actuator. The values of P, I and D have no effect
+  # pid: {p: 200.0, i: 0.01, d: 1.0}
 steering_right_front_position_controller:
-  type: effort_controllers/JointPositionController
+  type: position_controllers/JointPositionController
   joint: steering_right_front_joint
-  pid: {p: 2000.0, i: 0.01, d: 10.0}
+  #pid: {p: 200.0, i: 0.01, d: 1.0}
 wheel_left_rear_velocity_controller:
   type: velocity_controllers/JointVelocityController
   joint: wheel_left_rear_joint
-  pid: {p: 1000.0, i: 0.01, d: 10.0}
+  #The input velocity value is simply forwarded as output command
+  # to the joint actuator. The values of P, I and D have no effect
+  #pid: {p: 1000.0, i: 0.01, d: 10.0}
 wheel_right_rear_velocity_controller:
   type: velocity_controllers/JointVelocityController
   joint: wheel_right_rear_joint
-  pid: {p: 1000.0, i: 0.01, d: 10.0}
+  #pid: {p: 1000.0, i: 0.01, d: 10.0}

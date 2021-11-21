@@ -27,6 +27,8 @@ class VehicleInputSubscriber
     double wheel_tread_;
     double wheel_radius_;
 
+    static constexpr double kMaxSteer = 0.7; // 40 deg
+
   public:
     VehicleInputSubscriber();
     ~VehicleInputSubscriber(){};
@@ -51,14 +53,14 @@ VehicleInputSubscriber::VehicleInputSubscriber() : nh_(""), pnh_("~")
 void VehicleInputSubscriber::twistStampedCallback(const geometry_msgs::TwistStamped::ConstPtr &input_twist_msg)
 {
     std_msgs::Float64 output_wheel_right_rear, output_wheel_left_rear, output_steering_right_front, output_steering_left_front;
-    output_wheel_right_rear.data = input_twist_msg->twist.linear.x / wheel_radius_;
-    output_wheel_left_rear.data = input_twist_msg->twist.linear.x / wheel_radius_;
+    output_wheel_right_rear.data = input_twist_msg->twist.linear.x;
+    output_wheel_left_rear.data = input_twist_msg->twist.linear.x;
 
     double vref_rear = input_twist_msg->twist.linear.x;
     double delta_ref = input_twist_msg->twist.angular.z;
         //std::atan(input_twist_msg->twist.angular.z
         //    * wheel_base_ / vref_rear);
-    delta_ref = std::clamp(delta_ref, -M_PI / 4.0, M_PI / 4.0);// 45 deg max
+    delta_ref = std::clamp(delta_ref, -kMaxSteer, kMaxSteer);
 
     // TODO: implement Ackermann steering
     output_steering_right_front.data = delta_ref;
@@ -73,14 +75,15 @@ void VehicleInputSubscriber::twistStampedCallback(const geometry_msgs::TwistStam
 void VehicleInputSubscriber::twistCallback(const geometry_msgs::Twist::ConstPtr &input_twist_msg)
 {
     std_msgs::Float64 output_wheel_right_rear, output_wheel_left_rear, output_steering_right_front, output_steering_left_front;
-    output_wheel_right_rear.data = input_twist_msg->linear.x / wheel_radius_;
-    output_wheel_left_rear.data = input_twist_msg->linear.x / wheel_radius_;
+    output_wheel_right_rear.data = input_twist_msg->linear.x;
+    output_wheel_left_rear.data = input_twist_msg->linear.x;
 
     double vref_rear = input_twist_msg->linear.x;
     double delta_ref = input_twist_msg->angular.z;
         //std::atan(input_twist_msg->angular.z * wheel_base_ / vref_rear);
     // delta_ref = 0.0 < vref_rear ? delta_ref : -delta_ref;
-    delta_ref = std::clamp(delta_ref, -M_PI / 4.0, M_PI / 4.0);// 45 deg max
+    delta_ref = std::clamp(delta_ref, -kMaxSteer, kMaxSteer);
+    // ROS_INFO("steering %.2f", delta_ref);
 
     // TODO: implement Ackermann steering
     output_steering_right_front.data = delta_ref;
@@ -97,6 +100,7 @@ void VehicleInputSubscriber::sterringAngleCallback(const std_msgs::Float64::Cons
     std_msgs::Float64 output_steering_right_front, output_steering_left_front;
 
     double delta_ref = input_steering_angle_msg->data;
+    delta_ref = std::clamp(delta_ref, -kMaxSteer, kMaxSteer);
     output_steering_right_front.data = delta_ref;
     output_steering_left_front.data = delta_ref;
 
