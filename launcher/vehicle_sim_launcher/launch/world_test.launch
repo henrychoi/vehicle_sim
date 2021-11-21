@@ -38,8 +38,7 @@
     <node name="vehicle_input_subscriber" pkg="vehicle_sim_interface"
       type="vehicle_input_subscriber" respawn="false"
           output="screen">
-      <remap from="/dbw/cmd_vel" to="cmd_vel"/>
-      <remap from="twist_cmd" to="twist_cmd"/>
+      <remap from="cmd_vel" to="/dbw/cmd_vel"/>
     </node>
 
     <node name="vehicle_info_publisher" pkg="vehicle_sim_interface"
@@ -95,16 +94,17 @@
     <param name="sticky_buttons" value="false"/-->
   </node>
 
+  <!-- /joy is 60~90 Hz; downsample it -->
   <node name="throttle_joy" pkg="topic_tools" type="throttle"
-    args="messages /joy 16 /dbw/joy" />
+    args="messages /joy 12 /dbw/joy" />
 
   <!-- drive by wire: translate to twist_cmd -->
   <node name="dbw" pkg="dbw" type="dbw" required="true" output="screen">
     <param name="steer_axis" type="int" value="0"/>
     <param name="throttle_axis" type="int" value="1"/>
     <param name="deadman_btn" type="int" value="4"/> <!-- LR button-->>
-    <param name="steer_gain" type="double" value="1"/>
-    <param name="throttle_gain" type="double" value="1"/>
+    <param name="steer_gain" type="double" value="0.7"/>
+    <param name="throttle_gain" type="double" value="0.2"/>
   </node>
 
 </launch>
