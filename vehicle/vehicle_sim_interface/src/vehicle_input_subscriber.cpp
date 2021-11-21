@@ -55,20 +55,14 @@ void VehicleInputSubscriber::twistStampedCallback(const geometry_msgs::TwistStam
     output_wheel_left_rear.data = input_twist_msg->twist.linear.x / wheel_radius_;
 
     double vref_rear = input_twist_msg->twist.linear.x;
-    if (std::fabs(vref_rear) < 0.01)
-    {
-        vref_rear = 0.0 < vref_rear ? 0.01 : -0.01;
-    }
+    double delta_ref = input_twist_msg->twist.angular.z;
+        //std::atan(input_twist_msg->twist.angular.z
+        //    * wheel_base_ / vref_rear);
+    delta_ref = std::clamp(delta_ref, -M_PI / 4.0, M_PI / 4.0);// 45 deg max
 
-    double delta_ref = std::atan(input_twist_msg->twist.angular.z * wheel_base_ / vref_rear);
-    delta_ref = 0.0 < vref_rear ? delta_ref : -delta_ref;
-    if (M_PI / 4.0 < std::fabs(delta_ref))
-    {
-        delta_ref = 0.0 < delta_ref ? M_PI / 4.0 : -M_PI / 4.0;
-    }
-
-    output_steering_right_front.data = std::atan(std::tan(delta_ref) / (1.0 + (wheel_tread_ / (2.0 * wheel_base_)) * std::tan(delta_ref)));
-    output_steering_left_front.data = std::atan(std::tan(delta_ref) / (1.0 - (wheel_tread_ / (2.0 * wheel_base_)) * std::tan(delta_ref)));
+    // TODO: implement Ackermann steering
+    output_steering_right_front.data = delta_ref;
+    output_steering_left_front.data = delta_ref;
 
     wheel_right_rear_pub_.publish(output_wheel_right_rear);
     wheel_left_rear_pub_.publish(output_wheel_left_rear);
@@ -83,19 +77,14 @@ void VehicleInputSubscriber::twistCallback(const geometry_msgs::Twist::ConstPtr 
     output_wheel_left_rear.data = input_twist_msg->linear.x / wheel_radius_;
 
     double vref_rear = input_twist_msg->linear.x;
-    if (std::fabs(vref_rear) < 0.01)
-    {
-        vref_rear = 0.0 < vref_rear ? 0.01 : -0.01;
-    }
-
     double delta_ref = input_twist_msg->angular.z;
         //std::atan(input_twist_msg->angular.z * wheel_base_ / vref_rear);
     // delta_ref = 0.0 < vref_rear ? delta_ref : -delta_ref;
     delta_ref = std::clamp(delta_ref, -M_PI / 4.0, M_PI / 4.0);// 45 deg max
 
     // TODO: implement Ackermann steering
-    output_steering_right_front.data = std::atan(std::tan(delta_ref) / (1.0 + (wheel_tread_ / (2.0 * wheel_base_)) * std::tan(delta_ref)));
-    output_steering_left_front.data = std::atan(std::tan(delta_ref) / (1.0 - (wheel_tread_ / (2.0 * wheel_base_)) * std::tan(delta_ref)));
+    output_steering_right_front.data = delta_ref;
+    output_steering_left_front.data = delta_ref;
 
     wheel_right_rear_pub_.publish(output_wheel_right_rear);
     wheel_left_rear_pub_.publish(output_wheel_left_rear);
@@ -108,12 +97,8 @@ void VehicleInputSubscriber::sterringAngleCallback(const std_msgs::Float64::Cons
     std_msgs::Float64 output_steering_right_front, output_steering_left_front;
 
     double delta_ref = input_steering_angle_msg->data;
-    if (M_PI / 4.0 < std::fabs(delta_ref))
-    {
-        delta_ref = 0.0 < delta_ref ? M_PI / 4.0 : -M_PI / 4.0;
-    }
-    output_steering_right_front.data = std::atan(std::tan(delta_ref) / (1.0 + (wheel_tread_ / (2.0 * wheel_base_)) * std::tan(delta_ref)));
-    output_steering_left_front.data = std::atan(std::tan(delta_ref) / (1.0 - (wheel_tread_ / (2.0 * wheel_base_)) * std::tan(delta_ref)));
+    output_steering_right_front.data = delta_ref;
+    output_steering_left_front.data = delta_ref;
 
     steering_right_front_pub_.publish(output_steering_right_front);
     steering_left_front_pub_.publish(output_steering_left_front);
