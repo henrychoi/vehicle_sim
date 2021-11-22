@@ -5,9 +5,9 @@
     <type>transmission_interface/SimpleTransmission</type>
     <joint name="steering_left_front_joint">
       <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+      <!-- limit lower="-0.7" upper="0.7"/ -->
     </joint>
     <actuator name="steering_left_front_motor">
-       <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
        <mechanismReduction>1</mechanismReduction>
     </actuator>
   </transmission>
@@ -15,9 +15,9 @@
     <type>transmission_interface/SimpleTransmission</type>
     <joint name="steering_right_front_joint">
       <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
+      <!-- limit lower="-0.7" upper="0.7"/ -->
     </joint>
     <actuator name="steering_right_front_motor">
-       <hardwareInterface>hardware_interface/PositionJointInterface</hardwareInterface>
        <mechanismReduction>1</mechanismReduction>
     </actuator>
   </transmission>
@@ -28,7 +28,6 @@
       <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
     </joint>
     <actuator name="wheel_left_rear_motor">
-       <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
        <mechanismReduction>1</mechanismReduction>
     </actuator>
   </transmission>
@@ -38,7 +37,6 @@
       <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
     </joint>
     <actuator name="wheel_right_rear_motor">
-       <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
        <mechanismReduction>1</mechanismReduction>
     </actuator>
   </transmission>
