@@ -48,12 +48,12 @@ void DbwNode::onInput(const sensor_msgs::Joy::ConstPtr& input) {
 
 	ROS_DEBUG("onInput %d %.2f %.2f", input->buttons[deadman_btn_]
 		, input->axes[steer_axis_], input->axes[throttle_axis_]);
-	if (input->buttons[deadman_btn_]) {
 	geometry_msgs::Twist vel;
+	if (input->buttons[deadman_btn_]) {
 		vel.angular.z = steer_gain_ * input->axes[steer_axis_];
 		vel.linear.x = throttle_gain_ * input->axes[throttle_axis_];
-	pub_.publish(vel); 
 	}
+	pub_.publish(vel); 
 }
 
 int main(int argc, char **argv) {
