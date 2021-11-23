@@ -65,6 +65,7 @@ private:
 	message_filters::Subscriber<geometry_msgs::PoseStamped> _cam2marker_sub;
 	tf2_ros::MessageFilter<geometry_msgs::PoseStamped> _tf2_filter;
 
+	ros::Publisher aruco_tf_strobe_;
 	/**
 	 * Flag to check if _intrinsic parameters were received.
 	 * If set to false the camera will be _calibrated when a camera info message is received.
@@ -302,6 +303,9 @@ void ArucoPublisher::onCam2Marker(const geometry_msgs::PoseStampedConstPtr& cam2
 						, transformStamped.transform.translation.x
 						, transformStamped.transform.translation.y
 						, transformStamped.transform.translation.z);
+
+				std_msgs::Empty empty;// tell tf2 listeners that there is a new tf2 update
+				aruco_tf_strobe_.publish(empty);
 			}	break;
 
 			default:
@@ -370,6 +374,7 @@ ArucoPublisher::ArucoPublisher()
 , _cam2marker_pub(_ph.advertise<geometry_msgs::PoseStamped>("cam2marker", 1, true))
 , _tf2_listener(_tf2_buffer)
 , _tf2_filter(_cam2marker_sub, _tf2_buffer, "quad_link", 10, 0)
+, aruco_tf_strobe_(_nh.advertise<std_msgs::Empty>("tf_strobe", 1, true))
 {
 	int Nrows, Ncols;
 	float length, gap;

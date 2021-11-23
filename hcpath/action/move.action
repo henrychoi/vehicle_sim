@@ -1,0 +1,8 @@
+GaussianPathState start
+PathState goal 
+--- 
+#result definition 
+int32 final_count 
+--- 
+#feedback 
+int32 current_number 

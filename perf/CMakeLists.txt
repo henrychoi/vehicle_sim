@@ -8,7 +8,6 @@ find_package(catkin REQUIRED COMPONENTS
 	tf tf2 tf2_ros roscpp std_msgs gazebo_msgs
 )
 
-#Catkin dependencies
 catkin_package(CATKIN_DEPENDS tf2 tf2_ros roscpp std_msgs gazebo_msgs)
 
 add_executable(perf src/PerfNode.cpp)
