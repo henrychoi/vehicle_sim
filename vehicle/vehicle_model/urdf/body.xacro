@@ -21,9 +21,9 @@
           <box size="${vehicle_length} 0.9 ${vehicle_height}"/>
         </geometry> -->
         <!-- <origin xyz="${wheel_base/2} 0 ${vehicle_height/2}" rpy="0 ${-pi/2} ${pi/2}"/> -->
-        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <origin xyz="0.025 -0.01 -0.085" rpy="1.570796 0 1.5707963"/>
         <geometry>
-          <mesh filename="package://vehicle_model/mesh/body.dae" scale="${wheel_base/2.85} 1 1"/>
+          <mesh filename="package://vehicle_model/mesh/car4.dae" scale="1 1 1"/>
         </geometry>
         <material name="black">
             <color rgba="${25/255} ${25/255} ${25/255} .9"/>
