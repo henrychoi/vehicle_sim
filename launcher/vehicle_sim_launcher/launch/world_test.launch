@@ -104,8 +104,8 @@
     <param name="throttle_axis" type="int" value="1"/>
     <param name="deadman_btn" type="int" value="4"/> <!-- LR button-->
     <param name="x_btn" type="int" value="8"/> <!-- the "X" button-->
-    <param name="steer_gain" type="double" value="0.5"/>
-    <param name="throttle_gain" type="double" value="10"/>
+    <param name="steer_gain" type="double" value="0.15"/>
+    <param name="throttle_gain" type="double" value="20"/>
 
     <!-- <remap from="/aruco/tf_strobe" to="/dbw/tf_strobe"/> -->
   </node>
