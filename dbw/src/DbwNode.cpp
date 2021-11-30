@@ -32,8 +32,12 @@ class DbwNode {
 	boost::circular_buffer<int8_t> xQ_;
 	bool x_btn_state = false;
 
+	struct SimplePose_ { tf2::Quaternion Q; float T[3]; };
+	boost::circular_buffer<SimplePose_> poseQ_;
+	static constexpr size_t kPoseQSize = 16;
+
 	void onInput(const sensor_msgs::Joy::ConstPtr&);
-	void onTfStrobe(const std_msgs::Empty::ConstPtr&);
+	void onTfStrobe(const std_msgs::Header::ConstPtr&);
 	void startPathAction();
 public:
 	DbwNode();
@@ -41,16 +45,23 @@ public:
 
 DbwNode::DbwNode()
 : nh_("dbw")
-, tf_strobe_sub_(nh_.subscribe<std_msgs::Empty>("/aruco/tf_strobe", 10, &Self::onTfStrobe, this))
+, tf_strobe_sub_(nh_.subscribe<std_msgs::Header>("/aruco/tf_strobe", 10, &Self::onTfStrobe, this))
 , joy_sub_(nh_.subscribe<sensor_msgs::Joy>("joy", 10, &Self::onInput, this))
 , pub_(nh_.advertise<geometry_msgs::Twist>("cmd_vel",1))
 , tf2_listener_(tf2_buffer_)
-, ac_("hcpath", false)// true causes the client to spin its own thread
+, ac_("/path", false)// true causes the client to spin its own thread
 , xQ_(kXbtnBufferSize)
+, poseQ_(kPoseQSize)
 {
 	for (auto i=0; i < xQ_.capacity(); ++i) {
 		xQ_.push_back(0); // prepopulate so that averaging is simple
 	}
+#if 0
+	for (auto i=0; i < poseQ_.capacity(); ++i) {
+		SimplePose_ eye = {tf2::Quaternion(), {0,0,0}};
+		poseQ_.push_back(eye);
+	}
+#endif
 	assert(nh_.param("throttle_axis", throttle_axis_, 1));
 	assert(nh_.param("steer_axis", steer_axis_, 0));
 	assert(nh_.param("throttle_gain", throttle_gain_, 1.f));
@@ -95,41 +106,85 @@ void DbwNode::onInput(const sensor_msgs::Joy::ConstPtr& input) {
 	}
 }
 
-void DbwNode::onTfStrobe(const std_msgs::Empty::ConstPtr&) {
-	// variance of the last 2 seconds of pose estimate
-	// ROS_INFO("onTfStrobe");
-	ros::Time time = ros::Time::now() - ros::Duration(0.2);
-	const ros::Duration kCameraPeriod(1.0/6);
-	double yaw_sum = 0, yaw2_sum = 0;
-	static constexpr unsigned N = 12;
+void DbwNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
+	try {
+		const auto xform = tf2_buffer_.lookupTransform("trailer", "base_link", ros::Time(0));
+		SimplePose_ pose;
+		tf2::fromMsg(xform.transform.rotation, pose.Q);
+		pose.T[0] = xform.transform.translation.x;
+		pose.T[1] = xform.transform.translation.y;
+		pose.T[2] = xform.transform.translation.z;
+		poseQ_.push_back(pose);
+		// double x = xform.transform.rotation.x
+		// 	, y = xform.transform.rotation.y
+		// 	, z = xform.transform.rotation.z
+		// 	, w = xform.transform.rotation.w
+			// , yaw_est = (180.f/3.14159f)
+			// 			* atan2(2.0f*(y*z + w*x), w*w - x*x - y*y + z*z)
+			;
+	} catch (tf2::TransformException &ex) {
+		ROS_ERROR("onTfStrobe failed to lookup xform %s", ex.what());
+		return; // all history should be valid for stat  to be valid
+	}
+
+#if 1
+	if (poseQ_.size() == poseQ_.capacity()) {
+		double x_sum = 0, x2_sum = 0
+			, y_sum = 0, y2_sum = 0
+			;
+		for (auto pose: poseQ_) {
+			// x = xform.transform.translation.x;
+			// y = xform.transform.translation.y;
+			ROS_DEBUG("[%.2f, %.2f; %.2f, %.2f, %.2f, %.2f]"
+				, pose.T[0], pose.T[1]
+				, pose.Q.x(), pose.Q.y(), pose.Q.z(), pose.Q.w());
+		}
+	}
+
+#else
 	for (unsigned i=0; i < N; ++i) {
 		try {
-			auto xform = tf2_buffer_.lookupTransform("trailer", "base_footprint", time);
+			const ros::Duration ago((i+1)/6);
+			const ros::Time time = header->stamp - ago;
+			const auto xform = tf2_buffer_.lookupTransform("trailer", "base_link", time);
+				// .lookupTransform("aruco", "quad_link", time);
 			double x = xform.transform.rotation.x
 				, y = xform.transform.rotation.y
 				, z = xform.transform.rotation.z
 				, w = xform.transform.rotation.w
-				, yaw_est = atan2(2.0f * (w * z + x * y)
-						, 1.0f - 2.0f * (y * y + z * z))
+				, yaw_est = (180.f/3.14159f)
+							* atan2(2.0f*(y*z + w*x), w*w - x*x - y*y + z*z)
 				;
-				yaw_sum += yaw_est;
-				yaw2_sum += yaw_est * yaw_est;
+			x = xform.transform.translation.x;
+			y = xform.transform.translation.y;
+			ROS_INFO("%d.%03u [%.3f, %.3f, %.3f]", time.sec, time.nsec/1000000
+					, x, y, yaw_est);
+				// if (yaw_est < 0) yaw_est += 360.f;
+				yaw_sum += yaw_est; yaw2_sum += yaw_est * yaw_est;
+				x_sum += x;         x2_sum += x * x;
+				y_sum += y;         y2_sum += y * y;
 		} catch (tf2::TransformException &ex) {
-			ROS_ERROR("onTfStrobe %u failed to lookup trailer --> base_footprint xform %s"
+			ROS_ERROR("onTfStrobe %u failed to lookup xform %s"
 				, i, ex.what());
 			return; // all history should be valid for stat  to be valid
 		}
-		time -= kCameraPeriod;
+		// time -= kCameraPeriod;
 	}
-	double yaw_ave = yaw_sum / N, yaw_var = yaw2_sum/N - yaw_ave*yaw_ave;
-	ROS_DEBUG("yaw ave: %.2f, var: %.2f",  yaw_ave, yaw_var);
+	double x_ave = x_sum / N, x_var = x2_sum/N - x_ave*x_ave
+		, y_ave = y_sum / N, y_var = y2_sum/N - y_ave*y_ave
+		;
+	ROS_INFO("pose stat [%.2f/%.2f, %.2f/%.2f, %.2f/%.2f]"
+		,  x_ave, x_var,  y_ave, y_var,  yaw_ave, yaw_var);
+#endif
 }
 
 void DbwNode::startPathAction() {
+#if 0
 	if (!ac_.isServerConnected()) {
 		ROS_ERROR("hcpath server not found; cannot start path action");
 		return;
 	}
+#endif
 	try {
 		auto xform = tf2_buffer_.lookupTransform("trailer", "base_footprint"
                                 	, ros::Time(0));
@@ -137,13 +192,9 @@ void DbwNode::startPathAction() {
 			, y = xform.transform.rotation.y
 			, z = xform.transform.rotation.z
 			, w = xform.transform.rotation.w
-			, yaw_est = atan2(2.0f * (w * z + x * y)
-					, 1.0f - 2.0f * (y * y + z * z))
+				, yaw_est = (180.f/3.14159f)
+					* atan2(2.0f * (y*z + w*x), w*w - x*x - y*y + z*z)
 			;
-		ROS_INFO("base_footprint pose in trailer frame [%.2f, %.2f, %.2f]"
-				, xform.transform.translation.x, xform.transform.translation.y
-				, yaw_est
-				);
 		hcpath::moveGoal req;
 		hcpath::GaussianPathState& startRef = req.start;
 		hcpath::PathState& goalRef = req.goal;
@@ -155,6 +206,15 @@ void DbwNode::startPathAction() {
 		startRef.state.kappa = 0;
 		// initialize 
 		// startRef.sigma[4*0+0] = ;
+		ac_.sendGoal(req);
+#if 0
+		auto ok = ac_.waitForResult(ros::Duration(.1));
+		auto str = ac_.getState().toString();
+		ROS_INFO("path request [%.2f, %.2f, %.2f] result %s"
+				, xform.transform.translation.x, xform.transform.translation.y
+				, yaw_est, str.c_str()
+				);
+#endif
 	} catch (tf2::TransformException &ex) {
         ROS_ERROR("startPathAction failed to lookup trailer --> base_footprint xform %s"
 			, ex.what());

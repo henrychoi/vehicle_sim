@@ -5,7 +5,7 @@
   <arg name="ns" default="/autoware_gazebo"/>
   <arg name="gpu" default="false"/>
   <param name="robot_description" command="xacro  $(arg model) gpu:=$(arg gpu)" />
-  <arg name="rvizconfig" default="$(find urdf_tutorial)/rviz/urdf.rviz" />
+  <arg name="rvizconfig" default="$(find hcpath)/config/path.rviz" />
 
   <include file="$(find gazebo_ros)/launch/empty_world.launch">
     <env name="GAZEBO_MODEL_PATH" value="$(find gazebo_world_description)"/>
@@ -72,7 +72,7 @@
   -->
   <node pkg="tf2_ros" type="static_transform_publisher"
     name="aruco_trailer_broadcaster" 
-    args="-0.3 -0.235 -0.155  1 0 0 0  aruco trailer"
+    args="-0.3 0.235 0.155  0 0 0 1  aruco trailer"
     required="true" output="screen"/>
 
   <!-- Down sample the Gazebo link_states because it is a flood-->
@@ -80,8 +80,7 @@
     args="messages /gazebo/link_states 1.0 /truth/link_states" />
 
   <!-- Compare pose estimate against the Gazebo generated ground truth -->
-  <node name="perf" pkg="perf" type="perf" required="true" output="screen">
-  </node>
+  <!-- node name="perf" pkg="perf" type="perf" required="true" output="screen"/-->
 
   <!-- Xbox 360 controller input -->
   <node name="joy_node" pkg="joy" type="joy_node">
@@ -105,7 +104,7 @@
     <param name="deadman_btn" type="int" value="4"/> <!-- LR button-->
     <param name="x_btn" type="int" value="8"/> <!-- the "X" button-->
     <param name="steer_gain" type="double" value="0.15"/>
-    <param name="throttle_gain" type="double" value="20"/>
+    <param name="throttle_gain" type="double" value="10"/>
 
     <!-- <remap from="/aruco/tf_strobe" to="/dbw/tf_strobe"/> -->
   </node>

@@ -63,7 +63,7 @@ HcPathNode::HcPathNode()
 : nh_("hcpath")
 , ph_("~")
 // , server_(nh_.advertiseService("plan", &Self::onPathRequest, this))
-, as_(nh_, "hcpath", boost::bind(&Self::onRequest, this, _1)
+, as_(nh_, "/path", boost::bind(&Self::onRequest, this, _1)
 	, false)// THIS SHOULD ALWAYS BE SET TO FALSE TO AVOID RACE CONDITIONS
 , tf2_listener_(buffer_)
 {
@@ -136,13 +136,14 @@ void HcPathNode::onRequest(const moveGoalConstPtr &req) {
 	goal.kappa = goalRef.kappa;
 	goal.d = goalRef.d;
 
-	ROS_INFO("path request [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f, %.2f]"
-		, start.state.x, start.state.y, start.state.theta, start.state.kappa
-		, goal.x, goal.y, goal.theta, goal.kappa);
+	ROS_INFO("path request start [%.2f, %.2f, %.2f, %.2f]"
+		, start.state.x, start.state.y, start.state.theta, start.state.kappa);
 	vector<State> path = state_space.get_path(start.state, goal);
 	ROS_WARN("Generated path length %zd", path.size());
 
-	result_.final_count = (int32_t)path.size();
+	feedback_.current_number = (int32_t)path.size();
+	result_.final_count = 0;
+	as_.publishFeedback(feedback_);
 	as_.setSucceeded(result_);
 	// as_.setAborted(result_, "Failed");
 #if 0
