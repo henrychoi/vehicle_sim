@@ -32,7 +32,7 @@ class DbwNode {
 	boost::circular_buffer<int8_t> xQ_;
 	bool x_btn_state = false;
 
-	struct SimplePose_ { tf2::Quaternion Q; float T[3]; };
+	struct SimplePose_ { float yaw; float T[3]; };
 	boost::circular_buffer<SimplePose_> poseQ_;
 	static constexpr size_t kPoseQSize = 16;
 
@@ -106,76 +106,58 @@ void DbwNode::onInput(const sensor_msgs::Joy::ConstPtr& input) {
 	}
 }
 
+static double twopify(double alpha) {
+	static constexpr double k2Pi = 2*3.14159;
+	while (alpha < 0) alpha += k2Pi;
+	return alpha - k2Pi * floor(alpha / k2Pi);
+}
+
 void DbwNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 	try {
 		const auto xform = tf2_buffer_.lookupTransform("trailer", "base_link", ros::Time(0));
 		SimplePose_ pose;
-		tf2::fromMsg(xform.transform.rotation, pose.Q);
+		tf2::Quaternion Q;
+		tf2::fromMsg(xform.transform.rotation, Q);
+		tf2::Vector3 axis = Q.getAxis();
+		pose.yaw = Q.getAngle() * (-2*signbit(axis[2])+1);
+
 		pose.T[0] = xform.transform.translation.x;
 		pose.T[1] = xform.transform.translation.y;
 		pose.T[2] = xform.transform.translation.z;
+
 		poseQ_.push_back(pose);
-		// double x = xform.transform.rotation.x
-		// 	, y = xform.transform.rotation.y
-		// 	, z = xform.transform.rotation.z
-		// 	, w = xform.transform.rotation.w
-			// , yaw_est = (180.f/3.14159f)
-			// 			* atan2(2.0f*(y*z + w*x), w*w - x*x - y*y + z*z)
-			;
+		ROS_DEBUG("trailer -> base_link = [%.2f, %.2f; %.2f]"
+				, pose.T[0], pose.T[1], pose.yaw);
 	} catch (tf2::TransformException &ex) {
 		ROS_ERROR("onTfStrobe failed to lookup xform %s", ex.what());
 		return; // all history should be valid for stat  to be valid
 	}
 
-#if 1
-	if (poseQ_.size() == poseQ_.capacity()) {
+	if (poseQ_.size() == kPoseQSize) {
 		double x_sum = 0, x2_sum = 0
 			, y_sum = 0, y2_sum = 0
+			, yaw_sum = 0, yaw2_sum = 0
 			;
 		for (auto pose: poseQ_) {
-			// x = xform.transform.translation.x;
-			// y = xform.transform.translation.y;
-			ROS_DEBUG("[%.2f, %.2f; %.2f, %.2f, %.2f, %.2f]"
-				, pose.T[0], pose.T[1]
-				, pose.Q.x(), pose.Q.y(), pose.Q.z(), pose.Q.w());
+			ROS_DEBUG("[%.2f, %.2f; %.2f]", pose.T[0], pose.T[1], pose.yaw);
+			x_sum += pose.T[0]; x2_sum += pose.T[0] * pose.T[0];
+			y_sum += pose.T[1]; y2_sum += pose.T[1] * pose.T[1];
+			yaw_sum += pose.yaw;
+			yaw_sum = twopify(yaw_sum);
 		}
-	}
 
-#else
-	for (unsigned i=0; i < N; ++i) {
-		try {
-			const ros::Duration ago((i+1)/6);
-			const ros::Time time = header->stamp - ago;
-			const auto xform = tf2_buffer_.lookupTransform("trailer", "base_link", time);
-				// .lookupTransform("aruco", "quad_link", time);
-			double x = xform.transform.rotation.x
-				, y = xform.transform.rotation.y
-				, z = xform.transform.rotation.z
-				, w = xform.transform.rotation.w
-				, yaw_est = (180.f/3.14159f)
-							* atan2(2.0f*(y*z + w*x), w*w - x*x - y*y + z*z)
-				;
-			x = xform.transform.translation.x;
-			y = xform.transform.translation.y;
-			ROS_INFO("%d.%03u [%.3f, %.3f, %.3f]", time.sec, time.nsec/1000000
-					, x, y, yaw_est);
-				// if (yaw_est < 0) yaw_est += 360.f;
-				yaw_sum += yaw_est; yaw2_sum += yaw_est * yaw_est;
-				x_sum += x;         x2_sum += x * x;
-				y_sum += y;         y2_sum += y * y;
-		} catch (tf2::TransformException &ex) {
-			ROS_ERROR("onTfStrobe %u failed to lookup xform %s"
-				, i, ex.what());
-			return; // all history should be valid for stat  to be valid
+		double x_ave = x_sum / kPoseQSize, x_var = x2_sum/kPoseQSize - x_ave*x_ave
+			, y_ave = y_sum / kPoseQSize, y_var = y2_sum/kPoseQSize - y_ave*y_ave
+			, yaw_ave = yaw_sum / kPoseQSize
+			;
+		for (auto pose: poseQ_) {
+			auto d = twopify(yaw_ave - pose.yaw);
+			yaw2_sum += d*d;
 		}
-		// time -= kCameraPeriod;
+		double yaw_var = yaw2_sum / kPoseQSize;
+		ROS_INFO("pose stat [%.2f/%.2f, %.2f/%.2f, %.2f/%.2f]"
+			,  x_ave, x_var,  y_ave, y_var,  yaw_ave, yaw_var);
 	}
-	double x_ave = x_sum / N, x_var = x2_sum/N - x_ave*x_ave
-		, y_ave = y_sum / N, y_var = y2_sum/N - y_ave*y_ave
-		;
-	ROS_INFO("pose stat [%.2f/%.2f, %.2f/%.2f, %.2f/%.2f]"
-		,  x_ave, x_var,  y_ave, y_var,  yaw_ave, yaw_var);
-#endif
 }
 
 void DbwNode::startPathAction() {

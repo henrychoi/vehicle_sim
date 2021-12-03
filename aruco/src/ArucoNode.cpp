@@ -22,6 +22,8 @@
 #include <message_filters/subscriber.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.h>
 
+#include <cmath>
+
 using namespace cv;
 using namespace std;
 
@@ -56,7 +58,7 @@ private:
 	image_transport::ImageTransport _it;
 	image_transport::Publisher debug_img_pub;
 	image_transport::Subscriber _image0_sub, _image1_sub, _image2_sub, _image3_sub;
-	ros::Subscriber _cal1_sub;
+	ros::Subscriber cal0_sub_, cal2_sub_;
 
 	tf2_ros::TransformBroadcaster _br;
 	tf2_ros::Buffer tf2_buffer_;
@@ -129,6 +131,8 @@ static void convert_frame_to_message(const cv::Mat& frame,
 //   msg->header.frame_id = "base_link";
 }
 
+static const tf2::Quaternion sQx180(1, 0, 0, 0);
+
 /**
  * Callback executed every time a new camera frame is received.
  * This callback is used to process received images and publish messages with camera position data if any.
@@ -180,25 +184,42 @@ void ArucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 			Units should be in meters and radians. The OpenCV uses
 			Z+ to represent depth, Y- for height and X+ for lateral, but ROS uses X+ for depth (axial), Z+ for height, and
 			Y- for lateral movement.
-					ROS                    OpenCV
-			Z+                      Y- 
-			|                       |
-			|    X+                 |    Z+
-			|    /                  |    /
-			|   /                   |   /
-			|  /                    |  /
-			| /                     | /
-			|/                      |/
-			O-------------> Y-      O-------------> X+
+							ROS						OpenCV
+							Z+                         
+							|                        
+							|    X+                      Z+
+							|    /                       /
+							|   /                       /
+							|  /                       /
+							| /                       /
+							|/                       /
+			Y+ -------------O.............> Y-      O-------------> X+
+			                :						|
+							:						|
+							:						|
+							:						|
+							Z-						Y+
 		*/
+		float x =  camState_[camId].rvec[2] * scale
+			, y = camState_[camId].rvec[0] * scale
+			, z = camState_[camId].rvec[1] * scale
+			, w = cos(0.5f * angle)
+			// , yaw_est = (180.f/3.14159f)
+			// 			* atan2(2.0f * (y*z + w*x), w*w - x*x - y*y + z*z)
+			;
+		tf2::Quaternion Q(x, y, z, w);// (x, -z, y, -w);
+		Q = sQx180 * Q; // rotate the aruco marker axes (with the z aligned with
+		// the ROS x-axis) into the ROS frame
+
 		geometry_msgs::PoseStamped cam2marker;
-		cam2marker.pose.orientation.x =      camState_[camId].rvec[2] * scale;
-		cam2marker.pose.orientation.y = /*-*/-camState_[camId].rvec[0] * scale;
-		cam2marker.pose.orientation.z = /*-*/-camState_[camId].rvec[1] * scale;
-		cam2marker.pose.orientation.w = cos(0.5f * angle);
-		cam2marker.pose.position.x =      camState_[camId].tvec[2];
-		cam2marker.pose.position.y = /*-*/-camState_[camId].tvec[0];
-		cam2marker.pose.position.z = /*-*/-camState_[camId].tvec[1];
+		// rotate the quaternion formed above about x-axis by 180 deg
+		cam2marker.pose.orientation.x = Q.x();
+		cam2marker.pose.orientation.y = Q.y();
+		cam2marker.pose.orientation.z = Q.z();
+		cam2marker.pose.orientation.w = Q.w();
+		cam2marker.pose.position.x =  camState_[camId].tvec[2];
+		cam2marker.pose.position.y = -camState_[camId].tvec[0];
+		cam2marker.pose.position.z = -camState_[camId].tvec[1];
 		cam2marker.header.stamp = msg->header.stamp;
 		cam2marker.header.frame_id = format("quad%d_link", camId);
 		static uint32_t sSeq = 0;
@@ -210,17 +231,12 @@ void ArucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 		// yaw = atan2(2.0*(qy*qz + qw*qx), qw*qw - qx*qx - qy*qy + qz*qz);
 		// pitch = asin(-2.0*(qx*qz - qw*qy));
 		// roll = atan2(2.0*(qx*qy + qw*qz), qw*qw + qx*qx - qy*qy - qz*qz);
-		float x = cam2marker.pose.orientation.x
-			, y = cam2marker.pose.orientation.y
-			, z = cam2marker.pose.orientation.z
-			, w = cam2marker.pose.orientation.w
-			, yaw_est = (180.f/3.14159f)
-						* atan2(2.0f * (y*z + w*x), w*w - x*x - y*y + z*z)
-			;
+		tf2::Vector3 axis = Q.getAxis();
 		// ROS_INFO("onFrame cam%u Q = [%.2f, %.2f, %.2f, %.2f]", camId, x, y, z, w);
-		ROS_DEBUG("%d.%03u cam%u [%.2f, %.2f, %.2f]"
+		ROS_DEBUG("%d.%03u cam%u [%.2f, %.2f; (%.2f, %.2f, %.2f) %.2f]"
 			, msg->header.stamp.sec, msg->header.stamp.nsec/1000000, camId
-			, cam2marker.pose.position.x, cam2marker.pose.position.y, yaw_est);
+			, cam2marker.pose.position.x, cam2marker.pose.position.y
+			, axis[0], axis[1], axis[2], Q.getAngle());
 		if (_show_axis) { // Show the board frame
 		  	cv::aruco::drawAxis(frame, _intrinsic, _distortion
 			  	, camState_[camId].rvec, camState_[camId].tvec, 0.8);
@@ -308,69 +324,49 @@ void ArucoPublisher::onCam2Marker(const geometry_msgs::PoseStampedConstPtr& cam2
 					ROS_ERROR("Invalid Qave norm");
 					break;
 				}
-
-				// Due to the CV --> ROS axes convention, the marker is nominally
-				// rotated 180 deg about X (roll).  Correct this before publishing the
-				// TF.
-				static const tf2::Quaternion sQmarker_flip(1, 0, 0, 0);
-				// Qave = sQmarker_flip * Qave;
+				tf2::Vector3 axis = Qave.getAxis();
 
 				geometry_msgs::TransformStamped xf;
 				xf.header = quad2marker.header;
-#if 1
+				// Assume the vehicle ONLY yaws
+				double yaw = 0;
+				if (abs(axis[2]) > 0.8) { // rotation axis roughly along vertical
+					// => can assume that the rotation amount is the 
+					yaw = Qave.getAngle() * (-2*signbit(axis[2])+1);
+				}
+
 				xf.child_frame_id = "aruco";
 				xf.transform.translation.x = T.x;
 				xf.transform.translation.y = T.y;
 				xf.transform.translation.z = T.z;
-				xf.transform.rotation.x = Qave.x();
-				xf.transform.rotation.y = Qave.y();
-				xf.transform.rotation.z = Qave.z();
-				xf.transform.rotation.w = Qave.w();
-#else//flipping the transform yields a completely wrong result
-				xf.header.frame_id = "aruco";
-				xf.child_frame_id = quad2marker.header.frame_id;
-				xf.transform.translation.x = -T.x;
-				xf.transform.translation.y = -T.y;
-				xf.transform.translation.z = -T.z;
-				xf.transform.rotation.x = Qave.x();
-				xf.transform.rotation.y = Qave.y();
-				xf.transform.rotation.z = Qave.z();
-				xf.transform.rotation.w = -Qave.w();
-#endif
-				// xf.transform = xf.transform.inverse();
+				xf.transform.rotation.x = 0; //Qave.x();
+				xf.transform.rotation.y = 0; //Qave.y();
+				xf.transform.rotation.z = sin(0.5 * yaw); //Qave.z();
+				xf.transform.rotation.w = cos(0.5 * yaw); //Qave.w();
 				_br.sendTransform(xf);
 
-				if (true) {
-					float x = xf.transform.rotation.x
-						, y = xf.transform.rotation.y
-						, z = xf.transform.rotation.z
-						, w = xf.transform.rotation.w
-						, yaw_est = atan2(2.0f * (y*z + w*x), w*w - x*x - y*y + z*z)
-						;
-					ROS_INFO("%d.%03u aruco <-- quad_link = %.2f [%.2f, %.2f; %.2f, %.2f, %.2f, %.2f]"
-							, xf.header.stamp.sec, xf.header.stamp.nsec/1000000
-							, yaw_est
-							, xf.transform.translation.x, xf.transform.translation.y
-							, x, y, z, w);
-				}
+				ROS_DEBUG(//"%d.%03u "
+					"aruco <-- quad_link = [%.2f, %.2f; (%.2f, %.2f, %.2f), %.2f]"
+					//, xf.header.stamp.sec, xf.header.stamp.nsec/1000000
+					, xf.transform.translation.x, xf.transform.translation.y
+					, axis[0], axis[1], axis[2], yaw);
 				// tell tf2 listeners that there is a new tf2 update
 				aruco_tf_strobe_.publish(xf.header);
 
-				if (false) { // can't lookup by the same timestamp
-					auto xform = tf2_buffer_.lookupTransform("trailer", "quad_link"
-						, xf.header.stamp);
-					double x = xform.transform.rotation.x
-						, y = xform.transform.rotation.y
-						, z = xform.transform.rotation.z
-						, w = xform.transform.rotation.w
-						, yaw_est = (180.f/3.14159f)
-									* atan2(2.0f*(y*z + w*x), w*w - x*x - y*y + z*z)
+				if (false) { 
+					auto xform = tf2_buffer_.lookupTransform("trailer", "base_link"
+						, ros::Time(0)
+						//, xf.header.stamp // can't lookup by the same timestamp
+						);
+					tf2::Quaternion q(xform.transform.rotation.x
+						, xform.transform.rotation.y
+						, xform.transform.rotation.z
+						, xform.transform.rotation.w)
 						;
-					ROS_DEBUG("%d.%03u [%.2f, %.2f, %.2f]"
-						, xf.header.stamp.sec
-						, xf.header.stamp.nsec/1000000
+					const auto axi = q.getAxis();
+					ROS_INFO("trailer -> base_link = [%.2f, %.2f; (%.2f, %.2f, %.2f), %.2f]"
 						, xform.transform.translation.x, xform.transform.translation.y
-						, yaw_est);
+						, axi[0], axi[1], axi[2], q.getAngle());
 				}
 			}	break;
 
@@ -379,8 +375,6 @@ void ArucoPublisher::onCam2Marker(const geometry_msgs::PoseStampedConstPtr& cam2
 					, detectedQ_.size());
 				detectedQ_.clear();
 		}
-
-
 	} catch (tf2::TransformException &ex) {
   	    ROS_ERROR("Transform failure %s\n", ex.what());
   	}
@@ -436,7 +430,8 @@ ArucoPublisher::ArucoPublisher()
 , _image1_sub(_it.subscribe("quad1/image_raw", 1, &Self::onFrame, this))
 , _image2_sub(_it.subscribe("quad2/image_raw", 1, &Self::onFrame, this))
 , _image3_sub(_it.subscribe("quad3/image_raw", 1, &Self::onFrame, this))
-, _cal1_sub(_nh.subscribe("quad3/camera_info", 1 , &Self::onCameraInfo, this))
+, cal0_sub_(_nh.subscribe("quad0/camera_info", 1 , &Self::onCameraInfo, this))
+, cal2_sub_(_nh.subscribe("quad2/camera_info", 1 , &Self::onCameraInfo, this))
 , _cam2marker_pub(_ph.advertise<geometry_msgs::PoseStamped>("cam2marker", 1, true))
 , _tf2_listener(tf2_buffer_)
 , _tf2_filter(_cam2marker_sub, tf2_buffer_, "quad_link", 10, 0)
