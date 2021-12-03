@@ -141,6 +141,24 @@
           <material>
             <ambient>0 1 0 1</ambient>
             <diffuse>0 1 0 1</diffuse>
+           <specular>0 0 0 1</specular>
+            <emissive>0 0 0 0</emissive>
+          </material>
+        </visual>
+      </link>
+
+      <link name='aruco_rear'>
+        <pose relative_to="trailer">-0.375 0 0  0 -1.57079 0</pose>
+        <visual name='visual'>
+          <geometry><box><size>0.3 0.52 1e-05</size></box></geometry>
+          <material>
+            <script>
+              <uri>model://materials/scripts</uri>
+              <uri>model://materials/textures</uri>
+              <name>aruco_rear_marker</name>
+            </script>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
             <specular>0 0 0 1</specular>
             <emissive>0 0 0 0</emissive>
           </material>
@@ -150,12 +168,12 @@
       <link name='aruco_front'>
         <pose relative_to="trailer">0.3 0 0  0 -1.57079 3.14159</pose>
         <visual name='visual'>
-          <geometry><box><size>0.337 0.501 1e-05</size></box></geometry>
+          <geometry><box><size>0.3 0.52 1e-05</size></box></geometry>
           <material>
             <script>
               <uri>model://materials/scripts</uri>
               <uri>model://materials/textures</uri>
-              <name>ArucoVisualMarkerBoard/Marker</name>
+              <name>aruco_front_marker</name>
             </script>
             <ambient>1 1 1 1</ambient>
             <diffuse>1 1 1 1</diffuse>
@@ -180,6 +198,76 @@
       <joint name="aruco_front_corner_joint" type="fixed">
         <child>aruco_front_corner</child>
         <parent>aruco_front</parent>
+      </joint>
+
+      <link name='aruco_right'>
+        <pose relative_to="trailer">0 0.26 0  0 -1.57079 -1.57079</pose>
+        <visual name='visual'>
+          <geometry><box><size>0.3 0.75 1e-05</size></box></geometry>
+          <material>
+            <script>
+              <uri>model://materials/scripts</uri>
+              <uri>model://materials/textures</uri>
+              <name>aruco_right_marker</name>
+            </script>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+            <specular>0 0 0 1</specular>
+            <emissive>1 1 1 0</emissive>
+            <shader type='vertex'>
+              <normal_map>__default__</normal_map>
+            </shader>
+          </material>
+          <pose frame=''>0 0 0 0 -0 0</pose>
+          <cast_shadows>1</cast_shadows>
+          <transparency>0</transparency>
+        </visual>
+      </link>
+      <joint name="aruco_right_joint" type="fixed">
+        <child>aruco_right</child>
+        <parent>trailer</parent>
+      </joint>
+      <link name='aruco_right_corner'>
+        <pose relative_to="aruco_right">0.235 0 -0.155  0 0 0</pose>
+      </link>
+      <joint name="aruco_right_corner_joint" type="fixed">
+        <child>aruco_right_corner</child>
+        <parent>aruco_right</parent>
+      </joint>
+
+      <link name='aruco_left'>
+        <pose relative_to="trailer">0 -0.26 0  0 -1.57079 1.57079</pose>
+        <visual name='visual'>
+          <geometry><box><size>0.3 0.75 1e-05</size></box></geometry>
+          <material>
+            <script>
+              <uri>model://materials/scripts</uri>
+              <uri>model://materials/textures</uri>
+              <name>aruco_left_marker</name>
+            </script>
+            <ambient>1 1 1 1</ambient>
+            <diffuse>1 1 1 1</diffuse>
+            <specular>0 0 0 1</specular>
+            <emissive>1 1 1 0</emissive>
+            <shader type='vertex'>
+              <normal_map>__default__</normal_map>
+            </shader>
+          </material>
+          <pose frame=''>0 0 0 0 -0 0</pose>
+          <cast_shadows>1</cast_shadows>
+          <transparency>0</transparency>
+        </visual>
+      </link>
+      <joint name="aruco_left_joint" type="fixed">
+        <child>aruco_left</child>
+        <parent>trailer</parent>
+      </joint>
+      <link name='aruco_left_corner'>
+        <pose relative_to="aruco_front">-0.235 0 -0.155  0 0 0</pose>
+      </link>
+      <joint name="aruco_left_corner_joint" type="fixed">
+        <child>aruco_left_corner</child>
+        <parent>aruco_left</parent>
       </joint>
 
       <link name="leg1">

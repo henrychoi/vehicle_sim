@@ -1,0 +1,13 @@
+material aruco_front_marker
+{
+	technique
+	{
+		pass
+		{
+			texture_unit
+			{
+		          texture  marker1_front.jpg
+			}
+		}
+	}
+}

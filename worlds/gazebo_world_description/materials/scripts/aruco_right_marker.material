@@ -1,0 +1,13 @@
+material aruco_right_marker
+{
+	technique
+	{
+		pass
+		{
+			texture_unit
+			{
+		          texture  marker2_right.jpg
+			}
+		}
+	}
+}
