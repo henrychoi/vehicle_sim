@@ -49,7 +49,7 @@
     </gui>
 
     <model name="trailer">
-      <pose>-2 0 0.15 0 0 0</pose>
+      <pose>-3 0 0.15 0 0 0</pose>
       <static>false</static>
       <link name="trailer">
         <inertial>
