@@ -9,8 +9,8 @@ class VehicleInputSubscriber
   private:
     ros::NodeHandle nh_;
     ros::NodeHandle pnh_;
-    ros::Publisher wheel_right_rear_pub_;
-    ros::Publisher wheel_left_rear_pub_;
+    ros::Publisher vel_right_pub_;
+    ros::Publisher vel_left_pub_;
     ros::Publisher steering_right_front_pub_;
     ros::Publisher steering_left_front_pub_;
     ros::Subscriber twiststamped_sub_;
@@ -40,8 +40,8 @@ VehicleInputSubscriber::VehicleInputSubscriber() : nh_(""), pnh_("~")
     nh_.param("wheel_base", wheel_base_, 2.95);
     nh_.param("wheel_radius", wheel_radius_, 0.341);
     nh_.param("wheel_tread", wheel_tread_, 1.55);
-    wheel_right_rear_pub_ = nh_.advertise<std_msgs::Float64>("wheel_right_rear_velocity_controller/command", 1, true);
-    wheel_left_rear_pub_ = nh_.advertise<std_msgs::Float64>("wheel_left_rear_velocity_controller/command", 1, true);
+    vel_right_pub_ = nh_.advertise<std_msgs::Float64>("wheel_right_front_velocity_controller/command", 1, true);
+    vel_left_pub_ = nh_.advertise<std_msgs::Float64>("wheel_left_front_velocity_controller/command", 1, true);
     steering_right_front_pub_ = nh_.advertise<std_msgs::Float64>("steering_right_front_position_controller/command", 1, true);
     steering_left_front_pub_ = nh_.advertise<std_msgs::Float64>("steering_left_front_position_controller/command", 1, true);
     twiststamped_sub_ = nh_.subscribe("twist_cmd", 1, &VehicleInputSubscriber::twistStampedCallback, this);
@@ -66,8 +66,8 @@ void VehicleInputSubscriber::twistStampedCallback(const geometry_msgs::TwistStam
     output_steering_right_front.data = delta_ref;
     output_steering_left_front.data = delta_ref;
 
-    wheel_right_rear_pub_.publish(output_wheel_right_rear);
-    wheel_left_rear_pub_.publish(output_wheel_left_rear);
+    vel_right_pub_.publish(output_wheel_right_rear);
+    vel_left_pub_.publish(output_wheel_left_rear);
     steering_right_front_pub_.publish(output_steering_right_front);
     steering_left_front_pub_.publish(output_steering_left_front);
 }
@@ -89,8 +89,8 @@ void VehicleInputSubscriber::twistCallback(const geometry_msgs::Twist::ConstPtr 
     output_steering_right_front.data = delta_ref;
     output_steering_left_front.data = delta_ref;
 
-    wheel_right_rear_pub_.publish(output_wheel_right_rear);
-    wheel_left_rear_pub_.publish(output_wheel_left_rear);
+    vel_right_pub_.publish(output_wheel_right_rear);
+    vel_left_pub_.publish(output_wheel_left_rear);
     steering_right_front_pub_.publish(output_steering_right_front);
     steering_left_front_pub_.publish(output_steering_left_front);
 }
@@ -110,8 +110,8 @@ void VehicleInputSubscriber::sterringAngleCallback(const std_msgs::Float64::Cons
 
 void VehicleInputSubscriber::velocityCallback(const std_msgs::Float64::ConstPtr &input_velocity_msg)
 {
-    wheel_right_rear_pub_.publish(input_velocity_msg);
-    wheel_left_rear_pub_.publish(input_velocity_msg);
+    vel_right_pub_.publish(input_velocity_msg);
+    vel_left_pub_.publish(input_velocity_msg);
 }
 
 int main(int argc, char *argv[])

@@ -70,9 +70,9 @@ void VehicleInfoPublisher::jointStateCallback(const sensor_msgs::JointState::Con
             steering_right_front_angle = input_msg->position.at(i);
         if (input_msg->name.at(i) == std::string("steering_left_front_joint"))
             steering_left_front_angle = input_msg->position.at(i);
-        if (input_msg->name.at(i) == std::string("wheel_right_rear_joint"))
+        if (input_msg->name.at(i) == std::string("wheel_right_front_joint"))
             wheel_right_rear_vel = input_msg->velocity.at(i);
-        if (input_msg->name.at(i) == std::string("wheel_left_rear_joint"))
+        if (input_msg->name.at(i) == std::string("wheel_left_front_joint"))
             wheel_left_rear_vel = input_msg->velocity.at(i);
     }
     output_vel.data = wheel_radius_ * (wheel_left_rear_vel + wheel_right_rear_vel) / 2.0;
