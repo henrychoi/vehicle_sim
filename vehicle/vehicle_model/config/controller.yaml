@@ -12,14 +12,15 @@ steering_left_front_position_controller:
 steering_right_front_position_controller:
   type: position_controllers/JointPositionController
   joint: steering_right_front_joint
-wheel_left_rear_velocity_controller:
+
+wheel_left_front_velocity_controller:
   type: velocity_controllers/JointVelocityController
-  joint: wheel_left_rear_joint
+  joint: wheel_left_front_joint
   #The input velocity value is simply forwarded as output command
   # to the joint actuator. The values of P, I and D have no effect
-wheel_right_rear_velocity_controller:
+wheel_right_front_velocity_controller:
   type: velocity_controllers/JointVelocityController
-  joint: wheel_right_rear_joint
+  joint: wheel_right_front_joint
   
 # Trajectory controller and manual controller cannot co-exist
 steer_controller:
@@ -41,21 +42,21 @@ steer_controller:
 throttle_controller:
   type: "velocity_controllers/JointTrajectoryController"
   joints:
-    - wheel_left_rear_joint
-    - wheel_right_rear_joint
+    - wheel_left_front_joint
+    - wheel_right_front_joint
   constraints:
     #goal_time: 0.5
-    wheel_left_rear_joint:
+    wheel_left_front_joint:
       goal:       0.01
       trajectory: 0.05
-    wheel_right_rear_joint:
+    wheel_right_front_joint:
       goal:       0.01
       trajectory: 0.05
   gains:
-    wheel_left_rear_joint: {p: 10.0, i: 0.1, d: 1.0, i_clamp: 10}
-    wheel_right_rear_joint: {p: 10.0, i: 0.1, d: 1.0, i_clamp: 10}
+    wheel_left_front_joint: {p: 10.0, i: 0.1, d: 1.0, i_clamp: 10}
+    wheel_right_front_joint: {p: 10.0, i: 0.1, d: 1.0, i_clamp: 10}
   velocity_ff:
-    wheel_left_rear_joint: 1.0
-    wheel_right_rear_joint: 1.0
+    wheel_left_front_joint: 1.0
+    wheel_right_front_joint: 1.0
   stop_trajectory_duration: 5.0
   state_publish_rate: 10
