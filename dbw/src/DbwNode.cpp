@@ -35,6 +35,7 @@ class DbwNode {
 	struct SimplePose_ { float yaw; float T[3]; };
 	boost::circular_buffer<SimplePose_> poseQ_;
 	static constexpr size_t kPoseQSize = 16;
+	static constexpr double kPoseAveWeight = (1.0/kPoseQSize);
 
 	void onInput(const sensor_msgs::Joy::ConstPtr&);
 	void onTfStrobe(const std_msgs::Header::ConstPtr&);
@@ -146,26 +147,25 @@ void DbwNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 	if (poseQ_.size() == kPoseQSize) {
 		double x_sum = 0, x2_sum = 0
 			, y_sum = 0, y2_sum = 0
-			, yaw_sum = 0, yaw2_sum = 0
+			, yaw_ave = 0
 			;
 		for (auto pose: poseQ_) {
-			ROS_DEBUG("[%.2f, %.2f; %.2f]", pose.T[0], pose.T[1], pose.yaw);
+			ROS_INFO("[%.2f, %.2f; %.2f]", pose.T[0], pose.T[1], pose.yaw);
 			x_sum += pose.T[0]; x2_sum += pose.T[0] * pose.T[0];
 			y_sum += pose.T[1]; y2_sum += pose.T[1] * pose.T[1];
-			yaw_sum += pose.yaw;
-			yaw_sum = twopify(yaw_sum);
+			yaw_ave += kPoseAveWeight * pose.yaw;
+			// yaw_sum = pify(yaw_sum);
 		}
 
-		double x_ave = x_sum / kPoseQSize, x_var = x2_sum/kPoseQSize - x_ave*x_ave
-			, y_ave = y_sum / kPoseQSize, y_var = y2_sum/kPoseQSize - y_ave*y_ave
-			, yaw_ave = yaw_sum / kPoseQSize
+		double x_ave = kPoseAveWeight * x_sum, x_var = kPoseAveWeight * x2_sum - x_ave*x_ave
+			, y_ave = kPoseAveWeight * y_sum, y_var = kPoseAveWeight * y2_sum - y_ave*y_ave
+			, yaw_var = 0
 			;
 		for (auto pose: poseQ_) {
-			auto d = pify(yaw_ave - pose.yaw);
-			yaw2_sum += d*d;
+			auto d = (yaw_ave - pose.yaw);
+			yaw_var += kPoseAveWeight*d*d;
 		}
-		double yaw_var = yaw2_sum / kPoseQSize;
-		ROS_INFO("pose stat [%.2f/%.2f, %.2f/%.2f, %.2f/%.2f]"
+		ROS_INFO("pose stat [%.2f/%.2e, %.2f/%.2e, %.2f/%.2e]"
 			,  x_ave, x_var,  y_ave, y_var,  yaw_ave, yaw_var);
 	}
 }
