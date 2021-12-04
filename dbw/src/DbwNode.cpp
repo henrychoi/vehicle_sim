@@ -106,10 +106,20 @@ void DbwNode::onInput(const sensor_msgs::Joy::ConstPtr& input) {
 	}
 }
 
+#define PI 3.14159
+#define TWO_PI (2*PI)
 static double twopify(double alpha) {
-	static constexpr double k2Pi = 2*3.14159;
-	while (alpha < 0) alpha += k2Pi;
-	return alpha - k2Pi * floor(alpha / k2Pi);
+	while (alpha < 0) alpha += TWO_PI;
+	return alpha - TWO_PI * floor(alpha / TWO_PI);
+}
+
+static double pify(double alpha) {
+  double v = fmod(alpha, TWO_PI);
+  if (v < -PI)
+    v += TWO_PI;
+  else if (v > PI)
+    v -= TWO_PI;
+  return v;
 }
 
 void DbwNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
@@ -151,7 +161,7 @@ void DbwNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 			, yaw_ave = yaw_sum / kPoseQSize
 			;
 		for (auto pose: poseQ_) {
-			auto d = twopify(yaw_ave - pose.yaw);
+			auto d = pify(yaw_ave - pose.yaw);
 			yaw2_sum += d*d;
 		}
 		double yaw_var = yaw2_sum / kPoseQSize;

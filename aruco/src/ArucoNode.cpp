@@ -259,33 +259,16 @@ void ArucoPublisher::onCam2Marker(const geometry_msgs::PoseStampedConstPtr& cam2
     	tf2_buffer_.transform(*cam2marker, quad2marker, "quad_link");
 		tf2::Quaternion Q;
 		tf2::fromMsg(quad2marker.pose.orientation, Q);
-		if (true) {
-#if 1
-			float x = quad2marker.pose.orientation.x
-				, y = quad2marker.pose.orientation.y
-				, z = quad2marker.pose.orientation.z
-				, w = quad2marker.pose.orientation.w
-				, yaw_est = (180.f/3.14159f)
-					* atan2(2.0f * (y*z + w*x), w*w - x*x - y*y + z*z)
-				;
-			ROS_DEBUG("%d.%03u cam %d [%.3f, %.3f, %.3f] in _link"
+		if (false) {
+			ROS_INFO("%d.%03u cam %d [%.3f, %.3f; %.2f, %.2f, %.2f, %.2f] in _link"
 				, quad2marker.header.stamp.sec, quad2marker.header.stamp.nsec/1000000
 				, camId
-				, quad2marker.pose.position.x, quad2marker.pose.position.y, yaw_est);
-#else
-			// const auto axis = Q.getAxis();
-			ROS_INFO("%d.%03u cam %d pose in base_link Q = [%.2f, %.2f, %.2f, %.2f] T = [%.3f, %.3f, %.3f]"
-				, quad2marker.header.stamp.sec, quad2marker.header.stamp.nsec/1000000
-				, camId
+				, quad2marker.pose.position.x, quad2marker.pose.position.y
 				, quad2marker.pose.orientation.x
 				, quad2marker.pose.orientation.y
 				, quad2marker.pose.orientation.z
 				, quad2marker.pose.orientation.w
-				// , axis[0], axis[1], axis[2], Q.getW()
-				, quad2marker.pose.position.x
-				, quad2marker.pose.position.y
-				, quad2marker.pose.position.z);
-#endif
+			);
 		}
 		switch (detectedQ_.size()) {
 			case 2: { // I shouldn't finish calculation; save away the result
