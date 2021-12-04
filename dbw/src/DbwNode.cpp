@@ -13,6 +13,7 @@
 #include <hcpath/moveAction.h>
 #include <boost/circular_buffer.hpp>
 #include <numeric>
+#include <complex>
 
 using namespace std;
 
@@ -32,7 +33,7 @@ class DbwNode {
 	boost::circular_buffer<int8_t> xQ_;
 	bool x_btn_state = false;
 
-	struct SimplePose_ { float yaw; float T[3]; };
+	struct SimplePose_ { complex<tf2Scalar> heading; tf2Scalar yaw; tf2Scalar T[3]; };
 	boost::circular_buffer<SimplePose_> poseQ_;
 	static constexpr size_t kPoseQSize = 16;
 	static constexpr double kPoseAveWeight = (1.0/kPoseQSize);
@@ -126,47 +127,45 @@ static double pify(double alpha) {
 void DbwNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 	try {
 		const auto xform = tf2_buffer_.lookupTransform("trailer", "base_link", ros::Time(0));
-		SimplePose_ pose;
 		tf2::Quaternion Q;
 		tf2::fromMsg(xform.transform.rotation, Q);
 		tf2::Vector3 axis = Q.getAxis();
-		pose.yaw = Q.getAngle() * (-2*signbit(axis[2])+1);
-
-		pose.T[0] = xform.transform.translation.x;
-		pose.T[1] = xform.transform.translation.y;
-		pose.T[2] = xform.transform.translation.z;
-
+		tf2Scalar angle = Q.getAngle() * (1 - 2*signbit(axis[2])); // because the axis can be flipped
+		SimplePose_ pose = { // assume the received pose is roughly vertical
+			.heading = polar(1., angle), .yaw = angle 
+			, .T = { xform.transform.translation.x
+					, xform.transform.translation.y
+					, xform.transform.translation.z}
+		};
+		ROS_INFO("trailer -> base_link = [%.2f, %.2f; %.2f, %.2f]"
+				, pose.T[0], pose.T[1], axis[2], pose.yaw);
 		poseQ_.push_back(pose);
-		ROS_DEBUG("trailer -> base_link = [%.2f, %.2f; %.2f]"
-				, pose.T[0], pose.T[1], pose.yaw);
 	} catch (tf2::TransformException &ex) {
 		ROS_ERROR("onTfStrobe failed to lookup xform %s", ex.what());
 		return; // all history should be valid for stat  to be valid
 	}
 
-	if (poseQ_.size() == kPoseQSize) {
-		double x_sum = 0, x2_sum = 0
-			, y_sum = 0, y2_sum = 0
-			, yaw_ave = 0
-			;
+	if (poseQ_.full()) {
+		double x_sum = 0, x2_sum = 0, y_sum = 0, y2_sum = 0;
+		complex<tf2Scalar> heading_sum;
 		for (auto pose: poseQ_) {
-			ROS_INFO("[%.2f, %.2f; %.2f]", pose.T[0], pose.T[1], pose.yaw);
 			x_sum += pose.T[0]; x2_sum += pose.T[0] * pose.T[0];
 			y_sum += pose.T[1]; y2_sum += pose.T[1] * pose.T[1];
-			yaw_ave += kPoseAveWeight * pose.yaw;
-			// yaw_sum = pify(yaw_sum);
+			heading_sum += pose.heading;
 		}
-
-		double x_ave = kPoseAveWeight * x_sum, x_var = kPoseAveWeight * x2_sum - x_ave*x_ave
+		tf2Scalar yaw_ave = arg(heading_sum), yaw_var = 0
+			, x_ave = kPoseAveWeight * x_sum, x_var = kPoseAveWeight * x2_sum - x_ave*x_ave
 			, y_ave = kPoseAveWeight * y_sum, y_var = kPoseAveWeight * y2_sum - y_ave*y_ave
-			, yaw_var = 0
 			;
 		for (auto pose: poseQ_) {
-			auto d = (yaw_ave - pose.yaw);
-			yaw_var += kPoseAveWeight*d*d;
+			auto d = pify(yaw_ave - pose.yaw);
+			yaw_var += d*d;
 		}
+		ROS_DEBUG("yaw stat [%.1f, %.2f, %.2f, %.2e]"
+				, abs(heading_sum), arg(heading_sum), yaw_ave, yaw_var);
+		yaw_var *= kPoseAveWeight;
 		ROS_INFO("pose stat [%.2f/%.2e, %.2f/%.2e, %.2f/%.2e]"
-			,  x_ave, x_var,  y_ave, y_var,  yaw_ave, yaw_var);
+				,  x_ave, x_var,  y_ave, y_var,  yaw_ave, yaw_var);
 	}
 }
 
