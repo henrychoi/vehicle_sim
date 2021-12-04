@@ -33,6 +33,16 @@ PerfNode::PerfNode()
 {
 }
 
+#define PI 3.14159
+#define TWO_PI (2*PI)
+static double pify(double alpha) {
+  double v = fmod(alpha, TWO_PI);
+  if (v < -PI)
+    v += TWO_PI;
+  else if (v > PI)
+    v -= TWO_PI;
+  return v;
+}
 void PerfNode::onGazeboLinkStates(const gazebo_msgs::LinkStates &links) {\
 	static ros::Time sPrevTime = ros::Time::now();
 	const auto now = ros::Time::now();
@@ -63,51 +73,36 @@ void PerfNode::onGazeboLinkStates(const gazebo_msgs::LinkStates &links) {\
 		ROS_ERROR("trailer ground truth not found");
 		return;
 	}
-	auto& tp_base = links.pose[base_idx];
+	auto& tp_link = links.pose[base_idx];
 	auto& tp_trailer = links.pose[trailer_idx];
-	tf2::Quaternion Qbase, Qtrailer;
-	tf2::fromMsg(tp_base.orientation, Qbase);
+	tf2::Quaternion Qlink, Qtrailer;
+	tf2::fromMsg(tp_link.orientation, Qlink);
 	tf2::fromMsg(tp_trailer.orientation, Qtrailer);
-	// rotation FROM trailer TO the base_base
-	const auto Q2base = Qbase * Qtrailer.inverse();
-	try {
-		float x = Q2base.x(), y = Q2base.y()
-			, z = Q2base.z(), w = Q2base.w();
-		tf2::Vector3 T2base(tp_base.position.x - tp_trailer.position.x
-			, tp_base.position.y - tp_trailer.position.y
-			, tp_base.position.z - tp_trailer.position.z);
-		float yaw_gt = atan2(2.0f * (w * z + x * y), 1.0f - 2.0f * (y * y + z * z));
-		ROS_INFO("trailer to base truth "
-				// "Q = [%.2f, %.2f, %.2f, %.2f]
-				"Yaw %.2f T = [%.3f, %.3f, %.3f]"
-				, yaw_gt, T2base[0], T2base[1], T2base[2]);
+	// rotation FROM trailer TO the base_link
+	const auto Q = Qlink * Qtrailer.inverse();
+	tf2::Vector3 axis = Q.getAxis();
+	double yaw_gt = Q.getAngle() * (-2*signbit(axis[2])+1);		tf2::Vector3 T2base(tp_link.position.x - tp_trailer.position.x
+					, tp_link.position.y - tp_trailer.position.y
+					, tp_link.position.z - tp_trailer.position.z);
 
-		auto transformStamped = buffer_.lookupTransform("trailer", "base_link"
+	ROS_DEBUG("trailer to base truth; %.2f %.2f [%.2f, %.2f; %.2f]"
+			, Qlink.w(), Qtrailer.w(), T2base[0], T2base[1], yaw_gt);
+	try {
+		auto xform = buffer_.lookupTransform("trailer", "base_link"
                                 	, ros::Time(0));
-		// tf2::Quaternion Qest;
-		// tf2::fromMsg(transformStamped.transform.rotation, Qest);
-		x = transformStamped.transform.rotation.x;
-		y = transformStamped.transform.rotation.y;
-		z = transformStamped.transform.rotation.z;
-		w = transformStamped.transform.rotation.w;
-		float yaw_est = atan2(2.0f * (w * z + x * y), 1.0f - 2.0f * (y * y + z * z))
-			, yaw_e = yaw_gt - yaw_est
-			, x_e = T2base[0] - transformStamped.transform.translation.x
-			, y_e = T2base[1] - transformStamped.transform.translation.y
+		tf2::Quaternion Qest;
+		tf2::fromMsg(xform.transform.rotation, Qest);
+		tf2::Vector3 axi = Qest.getAxis();
+		double yaw_est = Qest.getAngle() * (-2*signbit(axi[2])+1)
+			, x = xform.transform.translation.x
+			, y = xform.transform.translation.y
+			, yaw_e = pify(yaw_gt - yaw_est)
+			, x_e = T2base[0] - x
+			, y_e = T2base[1] - y
 			;
-		ROS_INFO("base_ pose in trailer frame yaw [%.2f/%.2f, %.2f/%.2f, %.2f/%.2f]"
-				, x_e, transformStamped.transform.translation.x
-				, y_e, transformStamped.transform.translation.y
-				, yaw_e, yaw_est
+		ROS_INFO("base_ pose in trailer frame yaw [%.2f/%.2f, %.2f/%.2e, %.2f/%.2f]"
+				, x, x_e, y, y_e, yaw_est, yaw_e
 				);
-		ROS_DEBUG("base_ pose in trailer frame Q = [%.2f, %.2f, %.2f, %.2f] T = [%.3f, %.3f, %.3f]"
-				, transformStamped.transform.rotation.x
-				, transformStamped.transform.rotation.y
-				, transformStamped.transform.rotation.z
-				, transformStamped.transform.rotation.w
-				, transformStamped.transform.translation.x
-				, transformStamped.transform.translation.y
-				, transformStamped.transform.translation.z);
 	} catch (tf2::TransformException &ex) {
         ROS_WARN("%s",ex.what());
 	}
