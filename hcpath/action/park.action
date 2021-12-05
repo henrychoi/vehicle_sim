@@ -1,0 +1,8 @@
+# should be an enum?
+# 0: front kingpin
+# 1: rear side hitches
+int32 target
+--- 
+int32 final_count 
+--- 
+int32 current_number 
