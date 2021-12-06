@@ -16,7 +16,7 @@
     <link name="${suffix}_link">
       <visual>
         <geometry>
-          <mesh filename="package://vehicle_model/mesh/wheel.dae" scale="0.12 0.12 0.12"/>
+          <mesh filename="package://vehicle_model/mesh/wheel.dae" scale="0.15 0.15 0.15"/>
         </geometry>
         <origin xyz="0 0 0" rpy="0 0 ${yaw}"/>
       </visual>

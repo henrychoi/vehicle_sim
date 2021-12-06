@@ -1,8 +1,8 @@
-wheel_radius: 0.0641
-wheel_width: 0.0225
-wheel_base: 0.2640
+wheel_radius: 0.06
+wheel_width: 0.042
+wheel_base: 0.267
 wheel_tread: 0.230
-vehicle_mass: 3.1
-vehicle_length: 0.382
-vehicle_width: 0.181
-vehicle_height: 0.05
+vehicle_mass: 100
+vehicle_length: 0.400
+vehicle_width: 0.260
+vehicle_height: 0.100
