@@ -6,7 +6,7 @@ material aruco_right_marker
 		{
 			texture_unit
 			{
-		          texture  marker2_right.jpg
+		          texture  right_marker.jpg
 			}
 		}
 	}

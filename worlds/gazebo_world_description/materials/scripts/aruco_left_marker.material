@@ -6,7 +6,7 @@ material aruco_left_marker
 		{
 			texture_unit
 			{
-		          texture marker4_left.jpg
+		          texture  left_marker.jpg
 			}
 		}
 	}

@@ -6,7 +6,7 @@ material aruco_front_marker
 		{
 			texture_unit
 			{
-		          texture  marker1_front.jpg
+		          texture  front_marker.jpg
 			}
 		}
 	}

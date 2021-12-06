@@ -6,7 +6,7 @@ material aruco_rear_marker
 		{
 			texture_unit
 			{
-		          texture  marker3_rear.jpg
+		          texture  rear_marker.jpg
 			}
 		}
 	}
