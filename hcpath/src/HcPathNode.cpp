@@ -156,11 +156,11 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 			auto d = pify(yaw_ave - pose.yaw);
 			yaw_var += d*d;
 		}
-		ROS_DEBUG("yaw stat [%.1f, %.2f, %.2f, %.2e]"
+		ROS_DEBUG("yaw stat [%.1f, %.2f, %.2f+-sqrt(%.2e)]"
 				, abs(heading_sum), arg(heading_sum), yaw_ave, yaw_var);
 		yaw_var *= kPoseAveWeight;
 
-		ROS_INFO("pose stat [%.2f/%.2e, %.2f/%.2e, %.2f/%.2e]"
+		ROS_INFO("pose stat [%.2f+-%.2e, %.2f+-%.2e, %.2f+-%.2e]"
 				,  x_ave, x_var,  y_ave, y_var,  yaw_ave, yaw_var);
 
 		// store the current base_link pose (relative to the middle of the trailer)

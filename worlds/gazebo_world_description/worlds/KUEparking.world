@@ -82,7 +82,7 @@
     </gui>
 
     <model name="trailer">
-      <pose>-3 0 0.15 0 0 0</pose>
+      <pose>0 0 .25 0 0 0</pose>
       <static>false</static>
       <link name="trailer">
         <inertial>
@@ -98,17 +98,13 @@
           </inertia>
         </inertial>
         <collision name="collision">
-          <geometry>
-            <box>
-              <size>0.75 0.51 0.3</size>
-            </box>
-          </geometry>
+          <geometry><box><size>0.665 0.501 0.4</size></box></geometry>
         </collision>
         <visual name="visual">
-          <geometry><box><size>0.75 0.51 0.3</size></box></geometry>
+          <geometry><box><size>0.665 0.501 0.4</size></box></geometry>
           <material>
-            <ambient>0.7 0.7 0.7 1</ambient>
-            <diffuse>0.7 0.7 0.7 1</diffuse>
+            <ambient>.1 0.1 1 1</ambient>
+            <diffuse>.1 0.1 1 1</diffuse>
             <specular>0 0 0 1</specular>
             <emissive>0 0 0 0</emissive>
           </material>
@@ -116,11 +112,11 @@
       </link>
 
       <joint name="kingpin_joint" type="fixed">
-        <child>kingpin</child>
         <parent>trailer</parent>
+        <child>kingpin</child>
       </joint>
       <link name='kingpin'>
-        <pose>0.25 0 -.215  0 0 0</pose>
+        <pose>0.25 0 -.15  0 0 0</pose>
         <inertial>
           <mass>0.005</mass>
           <inertia>
@@ -138,37 +134,23 @@
           <geometry>
             <cylinder><radius>0.005</radius><length>0.03</length></cylinder>
           </geometry>
-          <material>
-            <ambient>0 1 0 1</ambient>
-            <diffuse>0 1 0 1</diffuse>
-           <specular>0 0 0 1</specular>
-            <emissive>0 0 0 0</emissive>
-          </material>
-        </visual>
-      </link>
-
-      <link name='aruco_rear'>
-        <pose relative_to="trailer">-0.375 0 0  0 -1.57079 0</pose>
-        <visual name='visual'>
-          <geometry><box><size>0.3 0.52 1e-05</size></box></geometry>
-          <material>
-            <script>
-              <uri>model://materials/scripts</uri>
-              <uri>model://materials/textures</uri>
-              <name>aruco_rear_marker</name>
-            </script>
-            <ambient>1 1 1 1</ambient>
-            <diffuse>1 1 1 1</diffuse>
+          <material> <!-- red -->
+            <ambient>1 0 0 1</ambient>
+            <diffuse>1 0 0 1</diffuse>
             <specular>0 0 0 1</specular>
             <emissive>0 0 0 0</emissive>
           </material>
         </visual>
       </link>
 
+      <joint name="aruco_front_joint" type="fixed">
+        <child>aruco_front</child>
+        <parent>trailer</parent>
+      </joint>
       <link name='aruco_front'>
-        <pose relative_to="trailer">0.375 0 0  0 -1.57079 3.14159</pose>
+        <pose>0.333 0 0  0 -1.57079 3.14159</pose>
         <visual name='visual'>
-          <geometry><box><size>0.3 0.51 1e-05</size></box></geometry>
+          <geometry><box><size>0.337 0.501 1e-6</size></box></geometry>
           <material>
             <script>
               <uri>model://materials/scripts</uri>
@@ -177,36 +159,31 @@
             </script>
             <ambient>1 1 1 1</ambient>
             <diffuse>1 1 1 1</diffuse>
-            <specular>0 0 0 1</specular>
-            <emissive>1 1 1 0</emissive>
-            <shader type='vertex'>
-              <normal_map>__default__</normal_map>
-            </shader>
+            <specular>.5 .5 .5 1</specular>
+            <shader type='vertex'><normal_map>__default__</normal_map></shader>
           </material>
-          <pose frame=''>0 0 0 0 -0 0</pose>
-          <cast_shadows>1</cast_shadows>
+          <cast_shadows>0</cast_shadows>
           <transparency>0</transparency>
         </visual>
-      </link>
-      <joint name="aruco_front_joint" type="fixed">
-        <child>aruco_front</child>
-        <parent>trailer</parent>
-      </joint>
-      <link name='aruco_front_corner'>
-        <pose relative_to="aruco_front">0 -0.235 -0.155  3.14159 0 0</pose>
       </link>
       <joint name="aruco_front_corner_joint" type="fixed">
         <child>aruco_front_corner</child>
         <parent>aruco_front</parent>
       </joint>
+      <link name='aruco_front_corner'>
+        <!-- I want the aruco marker normal going INTO the marker;
+         rotate half turn about X -->
+        <pose>0 -0.235 -0.155  0 0 0</pose>
+      </link>
+
+      <joint name='aruco_right_joint' type='fixed'>
+        <child>aruco_right</child>
+        <parent>trailer</parent>
+      </joint>
       <link name='aruco_right'>
-        <pose relative_to='trailer'>0 0.26 0 0 -1.57079 -1.57079</pose>
+        <pose>0 0.251 0 0 1.57079 -1.57079</pose>
         <visual name='visual'>
-          <geometry>
-            <box>
-              <size>0.3 0.75 1e-05</size>
-            </box>
-          </geometry>
+          <geometry><box><size>0.337 0.665 1e-6</size></box></geometry>
           <material>
             <script>
               <uri>model://materials/scripts</uri>
@@ -215,62 +192,22 @@
             </script>
             <ambient>1 1 1 1</ambient>
             <diffuse>1 1 1 1</diffuse>
-            <specular>0 0 0 1</specular>
-            <emissive>1 1 1 0</emissive>
-            <shader type='vertex'>
-              <normal_map>__default__</normal_map>
-            </shader>
+            <specular>.5 .5 .5 1</specular>
+            <shader type='vertex'><normal_map>__default__</normal_map></shader>
           </material>
-          <pose>0 0 0 0 -0 0</pose>
-          <cast_shadows>1</cast_shadows>
+          <cast_shadows>0</cast_shadows>
           <transparency>0</transparency>
         </visual>
-        <self_collide>0</self_collide>
-        <inertial>
-          <pose>0 0 0 0 -0 0</pose>
-          <inertia>
-            <ixx>1</ixx>
-            <ixy>0</ixy>
-            <ixz>0</ixz>
-            <iyy>1</iyy>
-            <iyz>0</iyz>
-            <izz>1</izz>
-          </inertia>
-          <mass>1</mass>
-        </inertial>
-        <enable_wind>0</enable_wind>
-        <kinematic>0</kinematic>
       </link>
-      <joint name='aruco_right_joint' type='fixed'>
-        <child>aruco_right</child>
+
+      <joint name="aruco_rear_joint" type="fixed">
+        <child>aruco_rear</child>
         <parent>trailer</parent>
       </joint>
-      <link name='aruco_right_corner'>
-        <pose relative_to='aruco_right'>0.235 0 -0.155 0 -0 0</pose>
-        <self_collide>0</self_collide>
-        <inertial>
-          <pose>0 0 0 0 -0 0</pose>
-          <inertia>
-            <ixx>1</ixx>
-            <ixy>0</ixy>
-            <ixz>0</ixz>
-            <iyy>1</iyy>
-            <iyz>0</iyz>
-            <izz>1</izz>
-          </inertia>
-          <mass>1</mass>
-        </inertial>
-        <enable_wind>0</enable_wind>
-        <kinematic>0</kinematic>
-      </link>
-      <joint name='aruco_right_corner_joint' type='fixed'>
-        <child>aruco_right_corner</child>
-        <parent>aruco_right</parent>
-      </joint>
-<link name='aruco_rear'>
-        <pose relative_to="trailer">-0.375 0 0  0 -1.57079 0</pose>
+      <link name='aruco_rear'>
+        <pose>-0.333 0 0  0 -1.57079 0</pose>
         <visual name='visual'>
-          <geometry><box><size>0.3 0.51 1e-05</size></box></geometry>
+          <geometry><box><size>0.337 0.501 1e-6</size></box></geometry>
           <material>
             <script>
               <uri>model://materials/scripts</uri>
@@ -279,36 +216,22 @@
             </script>
             <ambient>1 1 1 1</ambient>
             <diffuse>1 1 1 1</diffuse>
-            <specular>0 0 0 1</specular>
-            <emissive>1 1 1 0</emissive>
-            <shader type='vertex'>
-              <normal_map>__default__</normal_map>
-            </shader>
+            <specular>.5 .5 .5 1</specular>
+            <shader type='vertex'><normal_map>__default__</normal_map></shader>
           </material>
-          <pose frame=''>0 0 0 0 -0 0</pose>
-          <cast_shadows>1</cast_shadows>
+          <cast_shadows>0</cast_shadows>
           <transparency>0</transparency>
         </visual>
       </link>
-      <joint name="aruco_rear_joint" type="fixed">
-        <child>aruco_rear</child>
+
+      <joint name='aruco_left_joint' type='fixed'>
+        <child>aruco_left</child>
         <parent>trailer</parent>
       </joint>
-      <link name='aruco_rear_corner'>
-        <pose relative_to="aruco_rear">0 -0.235 -0.155  0 0 0</pose>
-      </link>
-      <joint name="aruco_rear_corner_joint" type="fixed">
-        <child>aruco_rear_corner</child>
-        <parent>aruco_rear</parent>
-      </joint>
- <link name='aruco_left'>
-        <pose relative_to='trailer'>0 -0.26 0 0 -1.57079 1.57079</pose>
+      <link name='aruco_left'>
+        <pose>0 -0.26 0 0 -1.57079 1.57079</pose>
         <visual name='visual'>
-          <geometry>
-            <box>
-              <size>0.3 0.75 1e-05</size>
-            </box>
-          </geometry>
+          <geometry><box><size>0.337 0.665 1e-6</size></box></geometry>
           <material>
             <script>
               <uri>model://materials/scripts</uri>
@@ -317,61 +240,16 @@
             </script>
             <ambient>1 1 1 1</ambient>
             <diffuse>1 1 1 1</diffuse>
-            <specular>0 0 0 1</specular>
-            <emissive>1 1 1 0</emissive>
-            <shader type='vertex'>
-              <normal_map>__default__</normal_map>
-            </shader>
+            <specular>.5 .5 .5 1</specular>
+            <shader type='vertex'><normal_map>__default__</normal_map></shader>
           </material>
-          <pose>0 0 0 0 -0 0</pose>
-          <cast_shadows>1</cast_shadows>
+          <cast_shadows>0</cast_shadows>
           <transparency>0</transparency>
         </visual>
-        <self_collide>0</self_collide>
-        <inertial>
-          <pose>0 0 0 0 -0 0</pose>
-          <inertia>
-            <ixx>1</ixx>
-            <ixy>0</ixy>
-            <ixz>0</ixz>
-            <iyy>1</iyy>
-            <iyz>0</iyz>
-            <izz>1</izz>
-          </inertia>
-          <mass>1</mass>
-        </inertial>
-        <enable_wind>0</enable_wind>
-        <kinematic>0</kinematic>
       </link>
-      <joint name='aruco_left_joint' type='fixed'>
-        <child>aruco_left</child>
-        <parent>trailer</parent>
-      </joint>
-      <link name='aruco_left_corner'>
-        <pose relative_to='aruco_front'>-0.235 0 -0.155 0 -0 0</pose>
-        <self_collide>0</self_collide>
-        <inertial>
-          <pose>0 0 0 0 -0 0</pose>
-          <inertia>
-            <ixx>1</ixx>
-            <ixy>0</ixy>
-            <ixz>0</ixz>
-            <iyy>1</iyy>
-            <iyz>0</iyz>
-            <izz>1</izz>
-          </inertia>
-          <mass>1</mass>
-        </inertial>
-        <enable_wind>0</enable_wind>
-        <kinematic>0</kinematic>
-      </link>
-      <joint name='aruco_left_corner_joint' type='fixed'>
-        <child>aruco_left_corner</child>
-        <parent>aruco_left</parent>
-      </joint>
       
-<link name="leg1">
-        <pose>0.27 0.22 -0.2 0 0 0</pose>
+      <link name="leg1">
+        <pose>0.27 0.22 -0.25 0 0 0</pose>
         <inertial>
           <mass>0.25</mass>
           <inertia>
@@ -401,9 +279,10 @@
         <child>leg1</child>
         <parent>trailer</parent>
       </joint>
+
       <link name="leg2">
         <static>false</static>
-        <pose>0.27 -0.22 -0.3 0 0 0</pose>
+        <pose>0.27 -0.22 -0.25 0 0 0</pose>
         <inertial>
           <inertia>
             <ixx>0.083</ixx><ixy>0.0</ixy><ixz>0.0</ixz>
@@ -436,7 +315,7 @@
 
       <link name="leg3">
         <static>false</static>
-        <pose>-0.27 0.22 -0.3 0 0 0</pose>
+        <pose>-0.27 0.22 -0.25 0 0 0</pose>
         <inertial>
           <mass>0.25</mass>
           <inertia>
@@ -468,7 +347,7 @@
       </joint>
 
       <link name="leg4">
-        <pose>-0.27 -0.22 -0.3 0 0 0</pose>
+        <pose>-0.27 -0.22 -0.25 0 0 0</pose>
         <inertial>
           <mass>0.25</mass>
           <inertia>
