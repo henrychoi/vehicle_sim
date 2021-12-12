@@ -19,7 +19,7 @@
 
   <!-- spawn the truck at a desired X and Y -->
   <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model"
-    args="-param robot_description -urdf -model autoware_gazebo -x 2"/>
+    args="-param robot_description -urdf -model autoware_gazebo -x 2 -y 0"/>
 
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
 
@@ -49,21 +49,8 @@
     </node>
   </group>
 
-  <node name="aruco" pkg="aruco" type="aruco" required="true" output="screen">
+  <node name="maruco" pkg="maruco" type="maruco" required="true" output="screen">
     <param name="show_axis" type="bool" value="true"/>
-    <param name="Nrows" type="int" value="2"/>
-    <param name="Ncols" type="int" value="3"/>
-    <param name="length" type="double" value="0.15"/>
-    <param name="gap" type="double" value="0.01"/>
-
-    <remap from="/aruco/quad0/image_raw" to="/quad0/image_raw"/>
-    <remap from="/aruco/quad0/camera_info" to="/quad0/camera_info"/>
-    <remap from="/aruco/quad1/image_raw" to="/quad1/image_raw"/>
-    <remap from="/aruco/quad1/camera_info" to="/quad1/camera_info"/>
-    <remap from="/aruco/quad2/image_raw" to="/quad2/image_raw"/>
-    <remap from="/aruco/quad2/camera_info" to="/quad2/camera_info"/>
-    <remap from="/aruco/quad3/image_raw" to="/quad3/image_raw"/>
-    <remap from="/aruco/quad3/camera_info" to="/quad3/camera_info"/>
   </node>
 
   <!-- have to add the static transform in THIS direction; the parent
@@ -72,10 +59,10 @@
   the ARUCO board is on the -y-z axes plane because of the OpenCV to ROS mapping.
   See the axes explanation in ArucoNode.cpp.
   -->
-  <node pkg="tf2_ros" type="static_transform_publisher"
+  <!--node pkg="tf2_ros" type="static_transform_publisher"
     name="aruco_trailer_broadcaster" 
     args="-0.375 0.235 0.155  0 0 0 1  aruco trailer"
-    required="true" output="screen"/>
+    required="true" output="screen"/-->
   <node pkg="tf2_ros" type="static_transform_publisher"
     name="trailer_kingpin_broadcaster" 
     args="0.25 0 0  0 0 0 1  trailer kingpin"

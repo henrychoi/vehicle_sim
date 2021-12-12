@@ -159,7 +159,7 @@
             </script>
             <ambient>1 1 1 1</ambient>
             <diffuse>1 1 1 1</diffuse>
-            <specular>.5 .5 .5 1</specular>
+            <specular>.7 .7 .7 1</specular>
             <shader type='vertex'><normal_map>__default__</normal_map></shader>
           </material>
           <cast_shadows>0</cast_shadows>
@@ -181,7 +181,7 @@
         <parent>trailer</parent>
       </joint>
       <link name='aruco_right'>
-        <pose>0 0.251 0 0 1.57079 -1.57079</pose>
+        <pose>0 -0.251 0 0 -1.57079 1.57079</pose>
         <visual name='visual'>
           <geometry><box><size>0.337 0.665 1e-6</size></box></geometry>
           <material>
@@ -192,7 +192,7 @@
             </script>
             <ambient>1 1 1 1</ambient>
             <diffuse>1 1 1 1</diffuse>
-            <specular>.5 .5 .5 1</specular>
+            <specular>.7 .7 .7 1</specular>
             <shader type='vertex'><normal_map>__default__</normal_map></shader>
           </material>
           <cast_shadows>0</cast_shadows>
@@ -216,7 +216,7 @@
             </script>
             <ambient>1 1 1 1</ambient>
             <diffuse>1 1 1 1</diffuse>
-            <specular>.5 .5 .5 1</specular>
+            <specular>.7 .7 .7 1</specular>
             <shader type='vertex'><normal_map>__default__</normal_map></shader>
           </material>
           <cast_shadows>0</cast_shadows>
@@ -229,7 +229,7 @@
         <parent>trailer</parent>
       </joint>
       <link name='aruco_left'>
-        <pose>0 -0.26 0 0 -1.57079 1.57079</pose>
+        <pose>0 0.251 0 0 1.57079 -1.57079</pose>
         <visual name='visual'>
           <geometry><box><size>0.337 0.665 1e-6</size></box></geometry>
           <material>
@@ -240,7 +240,7 @@
             </script>
             <ambient>1 1 1 1</ambient>
             <diffuse>1 1 1 1</diffuse>
-            <specular>.5 .5 .5 1</specular>
+            <specular>.7 .7 .7 1</specular>
             <shader type='vertex'><normal_map>__default__</normal_map></shader>
           </material>
           <cast_shadows>0</cast_shadows>
@@ -270,8 +270,6 @@
           <material>
             <ambient>0.7 0.7 0.7 1</ambient>
             <diffuse>0.7 0.7 0.7 1</diffuse>
-            <specular>0 0 0 1</specular>
-            <emissive>0 0 0 0</emissive>
           </material>
         </visual>
       </link>
@@ -303,8 +301,6 @@
           <material>
             <ambient>0.7 0.7 0.7 1</ambient>
             <diffuse>0.7 0.7 0.7 1</diffuse>
-            <specular>0 0 0 1</specular>
-            <emissive>0 0 0 0</emissive>
           </material>
         </visual>
       </link>
@@ -336,8 +332,6 @@
           <material>
             <ambient>0.7 0.7 0.7 1</ambient>
             <diffuse>0.7 0.7 0.7 1</diffuse>
-            <specular>0 0 0 1</specular>
-            <emissive>0 0 0 0</emissive>
           </material>
         </visual>
       </link>
@@ -368,8 +362,6 @@
           <material>
             <ambient>0.7 0.7 0.7 1</ambient>
             <diffuse>0.7 0.7 0.7 1</diffuse>
-            <specular>0 0 0 1</specular>
-            <emissive>0 0 0 0</emissive>
           </material>
         </visual>
       </link>

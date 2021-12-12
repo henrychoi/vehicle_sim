@@ -76,7 +76,7 @@ private:
 
 	bool _show_axis = false;
 
-	Ptr<aruco::GridBoard> _board;
+	Ptr<aruco::GridBoard> board_;
 
 	struct _CamState {
 		Vec3d rvec, tvec;
@@ -157,18 +157,23 @@ void ArucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 		Mat frame = cv_bridge::toCvShare(msg, "mono8")->image;
 		vector<int> markerIds;
 		vector<vector<Point2f>> markerCorners;
-		aruco::detectMarkers(frame, _board->dictionary, markerCorners, markerIds
+		aruco::detectMarkers(frame, board_->dictionary, markerCorners, markerIds
 			// optional args
 			// detector parameters, rejectedImgPoints, _intrinsic, _distortion
 			);
 		if(markerIds.size() <= 0
-			|| !aruco::estimatePoseBoard(markerCorners, markerIds, _board
+			|| !aruco::estimatePoseBoard(markerCorners, markerIds, board_
 					, _intrinsic, _distortion
 					, camState_[camId].rvec, camState_[camId].tvec
 					// sometimes yields Z axis going INTO the board. so can't use this
 					// , cv::SOLVEPNP_P3P
 					)) {
 			return;
+		}
+
+		string markerIdStr = format("%d", markerIds[0]);
+		for (auto i=1; i < markerIds.size(); ++i) {
+			markerIdStr += format(",%d", markerIds[i]);
 		}
 		// output rotation vector is an angle * axis formulation
 		// cvRodrigues2() converts rotation vector to to a 3-by-3 rotation matrix  
@@ -182,9 +187,9 @@ void ArucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 		float sina2 = sin(0.5f * angle);
 		float scale = sina2 / angle;
 
-		ROS_DEBUG("%zd markers in cam%u; T = [%.2f, %.2f, %.2f] R = [%.2f, %.2f, %.2f]"
+		ROS_INFO("markers (%s) in cam%u; T = [%.2f, %.2f, %.2f] R = [%.2f, %.2f, %.2f]"
 				" "
-				, markerIds.size(), camId
+				, markerIdStr.c_str(), camId
 				, camState_[camId].tvec[0], camState_[camId].tvec[1], camState_[camId].tvec[2]
 				, camState_[camId].rvec[0], camState_[camId].rvec[1], camState_[camId].rvec[2]
 				);
@@ -237,7 +242,7 @@ void ArucoPublisher::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 		// pitch = asin(-2.0*(qx*qz - qw*qy));
 		// roll = atan2(2.0*(qx*qy + qw*qz), qw*qw + qx*qx - qy*qy - qz*qz);
 		tf2::Vector3 axis = Q.getAxis();
-		ROS_DEBUG(//"%d.%03u "
+		ROS_INFO(//"%d.%03u "
 			"cam%u (%.2f, %.2f); Q(%.2f, %.2f, %.2f, %.2f) = [%.2f, %.2f, %.2f] %.2f"
 			// , msg->header.stamp.sec, msg->header.stamp.nsec/1000000
 			, camId, cam2marker.pose.position.x, cam2marker.pose.position.y
@@ -413,12 +418,12 @@ ArucoPublisher::ArucoPublisher()
 : _nh("aruco"), _ph("~")
 , _it(_nh)
 , debug_img_pub(_it.advertise("debug", 1))
-, _image0_sub(_it.subscribe("quad0/image_raw", 1, &Self::onFrame, this))
-, _image1_sub(_it.subscribe("quad1/image_raw", 1, &Self::onFrame, this))
-, _image2_sub(_it.subscribe("quad2/image_raw", 1, &Self::onFrame, this))
-, _image3_sub(_it.subscribe("quad3/image_raw", 1, &Self::onFrame, this))
-, cal0_sub_(_nh.subscribe("quad0/camera_info", 1 , &Self::onCameraInfo, this))
-, cal2_sub_(_nh.subscribe("quad2/camera_info", 1 , &Self::onCameraInfo, this))
+, _image0_sub(_it.subscribe("/quad0/image_raw", 1, &Self::onFrame, this))
+, _image1_sub(_it.subscribe("/quad1/image_raw", 1, &Self::onFrame, this))
+, _image2_sub(_it.subscribe("/quad2/image_raw", 1, &Self::onFrame, this))
+, _image3_sub(_it.subscribe("/quad3/image_raw", 1, &Self::onFrame, this))
+, cal0_sub_(_nh.subscribe("/quad0/camera_info", 1 , &Self::onCameraInfo, this))
+, cal2_sub_(_nh.subscribe("/quad2/camera_info", 1 , &Self::onCameraInfo, this))
 , _cam2marker_pub(_ph.advertise<geometry_msgs::PoseStamped>("cam2marker", 1, true))
 , _tf2_listener(tf2_buffer_)
 , _tf2_filter(_cam2marker_sub, tf2_buffer_, "quad_link", 10, 0)
@@ -476,7 +481,15 @@ ArucoPublisher::ArucoPublisher()
   	_tf2_filter.registerCallback(boost::bind(&Self::onCam2Marker, this, _1));
   
   	auto dict = aruco::getPredefinedDictionary(aruco::DICT_4X4_50);
-	_board = aruco::GridBoard::create(Ncols, Nrows, length, gap, dict);
+	board_ = aruco::GridBoard::create(Ncols, Nrows, length, gap, dict);
+	assert(board_->ids.size() == board_->objPoints.size());
+	for (auto i=0; i < board_->objPoints.size(); ++i) {
+		const auto& rect = board_->objPoints[i];
+		ROS_INFO("rectangle: %d", board_->ids[i]);
+		for (auto pt: rect) {
+			ROS_INFO("%s", format("(%.2f, %.2f, %.2f)", pt.x, pt.y, pt.z).c_str());
+		}
+	}
 }
 
 int main(int argc, char **argv) {
