@@ -131,12 +131,6 @@ static void convert_frame_to_message(const cv::Mat& frame,
 //   msg->header.frame_id = "base_link";
 }
 
-static const tf2::Quaternion sQx180(1, 0, 0, 0)
-, sQy180(0, 1, 0, 0)
-, sQcv2ros(0.5, 0.5, 0.5, 0.5) // = (0, 0, sqrt(2), sqrt(2)) x (sqrt(2), 0, 0, sqrt(2))
-, sQaruco2ros(0.5, 0.5, -0.5, -0.5) // = (0, 0, sqrt(2), sqrt(2)) x (-sqrt(2), 0, 0, sqrt(2))
-;
-
 /**
  * Callback executed every time a new camera frame is received.
  * This callback is used to process received images and publish messages with camera position data if any.
@@ -428,7 +422,7 @@ Maruco::Maruco()
 , _cam2marker_pub(_ph.advertise<geometry_msgs::PoseStamped>("cam2marker", 1, true))
 , _tf2_listener(tf2_buffer_)
 , _tf2_filter(_cam2marker_sub, tf2_buffer_, "quad_link", 10, 0)
-, aruco_tf_strobe_(_nh.advertise<std_msgs::Header>("tf_strobe", 1, true))
+, aruco_tf_strobe_(_nh.advertise<std_msgs::Header>("/aruco/tf_strobe", 1, true))
 {
 	assert(_nh.param("show_axis", _show_axis, false));
 	_nh.param("calibrated", _calibrated, false);

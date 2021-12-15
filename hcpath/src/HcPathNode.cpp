@@ -37,6 +37,7 @@ using namespace hcpath;
 class HcPathNode {
 	typedef HcPathNode Self;
     ros::NodeHandle nh_, ph_;
+	ros::Publisher pub_path_;
 	ros::Subscriber tf_strobe_sub_;
 	// ros::ServiceServer server_;
 	actionlib::SimpleActionServer<hcpath::parkAction> as_;
@@ -76,6 +77,7 @@ public:
 HcPathNode::HcPathNode()
 : nh_("hcpath")
 , ph_("~")
+, pub_path_(ph_.advertise<nav_msgs::Path>("visualization_path", 10))
 , tf_strobe_sub_(nh_.subscribe<std_msgs::Header>("/aruco/tf_strobe", 10, &Self::onTfStrobe, this))
 // , server_(nh_.advertiseService("plan", &Self::onPathRequest, this))
 , as_(nh_, "/path" //, boost::bind(&Self::onRequest, this, _1)
@@ -175,12 +177,7 @@ void HcPathNode::onGoal() {
 	// Get the path from the current base_link pose to the dock target
 	// (0: fifth_whl or 1: side hitch)
 	ROS_INFO("onGoal target %d", target);
-}
-
-void HcPathNode::onPreempt(){
-	ROS_WARN("Preempted!");
-	result_.final_count = 1;
-	as_.setPreempted(result_, "preempted");
+	auto t0 = ros::Time::now();
 	HCpmpm_Reeds_Shepp_State_Space state_space(kappa_max_, sigma_max_, discretization_);
 	state_space.set_filter_parameters(motion_noise_, measurement_noise_, controller_);
 	State start = { .x = rel_x_ave_, .y = rel_y_ave_
@@ -189,11 +186,26 @@ void HcPathNode::onPreempt(){
 	ROS_INFO("path request start [%.2f, %.2f, %.2f] --> [%.2f, %.2f]"
 		, start.x, start.y, start.theta, goal.x, goal.y);
 	vector<State> path = state_space.get_path(start, goal);
+	auto elapsed = ros::Time::now() - t0;
 	ROS_WARN("Generated path length %zd", path.size());
 
-	feedback_.current_number = (int32_t)path.size();
-	result_.final_count = 0;
-	as_.publishFeedback(feedback_);
+	nav_msgs::Path nav_path;
+	nav_path.header.frame_id = "trailer";
+	for (const auto& state : path) {
+		geometry_msgs::PoseStamped pose;
+		pose.pose.position.x = state.x;
+		pose.pose.position.y = state.y;
+		pose.pose.orientation.z = sin(0.5 * state.theta);
+		pose.pose.orientation.w = cos(0.5 * state.theta);
+		nav_path.poses.push_back(pose);
+    }
+	pub_path_.publish(nav_path);
+}
+
+void HcPathNode::onPreempt(){
+	ROS_WARN("Preempted!");
+	result_.final_count = 1;
+	as_.setPreempted(result_, "preempted");
 }
 
 void HcPathNode::onRequest(const parkGoalConstPtr &req) {

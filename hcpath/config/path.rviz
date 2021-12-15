@@ -205,14 +205,14 @@ Visualization Manager:
       Frame Timeout: 15
       Frames:
         All Enabled: false
-        aruco:
-          Value: true
         base_footprint:
           Value: true
         base_link:
           Value: false
         imu_link:
           Value: false
+        kingpin:
+          Value: true
         quad0_link:
           Value: false
         quad0_optical_link:
@@ -241,12 +241,8 @@ Visualization Manager:
           Value: true
         wheel_left_front_link:
           Value: true
-        wheel_left_rear_link:
-          Value: false
         wheel_right_front_link:
           Value: true
-        wheel_right_rear_link:
-          Value: false
       Marker Alpha: 1
       Marker Scale: 1
       Name: TF
@@ -259,9 +255,6 @@ Visualization Manager:
             imu_link:
               {}
             quad_link:
-              aruco:
-                trailer:
-                  {}
               quad0_link:
                 quad0_optical_link:
                   {}
@@ -274,6 +267,9 @@ Visualization Manager:
               quad3_link:
                 quad3_optical_link:
                   {}
+              trailer:
+                kingpin:
+                  {}
             steering_front_link:
               steering_left_front_link:
                 wheel_left_front_link:
@@ -281,10 +277,6 @@ Visualization Manager:
               steering_right_front_link:
                 wheel_right_front_link:
                   {}
-            wheel_left_rear_link:
-              {}
-            wheel_right_rear_link:
-              {}
       Update Interval: 0
       Value: true
     - Class: rviz/Image
@@ -297,6 +289,30 @@ Visualization Manager:
       Normalize Range: true
       Queue Size: 2
       Transport Hint: theora
+      Unreliable: false
+      Value: true
+    - Alpha: 1
+      Buffer Length: 1
+      Class: rviz/Path
+      Color: 25; 255; 0
+      Enabled: true
+      Head Diameter: 0.30000001192092896
+      Head Length: 0.20000000298023224
+      Length: 0.30000001192092896
+      Line Style: Lines
+      Line Width: 0.029999999329447746
+      Name: Path
+      Offset:
+        X: 0
+        Y: 0
+        Z: 0
+      Pose Color: 255; 85; 255
+      Pose Style: None
+      Queue Size: 10
+      Radius: 0.029999999329447746
+      Shaft Diameter: 0.10000000149011612
+      Shaft Length: 0.10000000149011612
+      Topic: /hcpath/visualization_path
       Unreliable: false
       Value: true
   Enabled: true
@@ -326,7 +342,7 @@ Visualization Manager:
   Value: true
   Views:
     Current:
-      Angle: 0.0
+      Angle: 0
       Class: rviz/TopDownOrtho
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.05999999865889549
