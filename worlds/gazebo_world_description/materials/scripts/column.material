@@ -1,4 +1,4 @@
-material ArucoVisualMarkerBoard/Marker
+material column/parking
 {
 	technique
 	{
@@ -6,7 +6,7 @@ material ArucoVisualMarkerBoard/Marker
 		{
 			texture_unit
 			{
-				texture 2x3.png
+				texture column.png
 			}
 		}
 	}

@@ -1,0 +1,13 @@
+material aruco_rear_marker
+{
+	technique
+	{
+		pass
+		{
+			texture_unit
+			{
+		          texture  rear_marker.jpg
+			}
+		}
+	}
+}

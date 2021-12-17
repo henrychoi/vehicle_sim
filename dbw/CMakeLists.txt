@@ -4,14 +4,13 @@ project(dbw)
 add_compile_options(-std=c++17)
 
 find_package(catkin REQUIRED COMPONENTS
-	roscpp std_msgs sensor_msgs geometry_msgs tf tf2 tf2_ros hcpath
+	roscpp actionlib actionlib_msgs std_msgs sensor_msgs geometry_msgs hcpath
 )
 find_package(Boost REQUIRED)
 
-catkin_package(CATKIN_DEPENDS tf2 tf2_ros
-	roscpp std_msgs sensor_msgs geometry_msgs
+catkin_package(
+	CATKIN_DEPENDS roscpp std_msgs sensor_msgs geometry_msgs
 )
-catkin_package(DEPENDS Boost)
 
 add_executable(dbw src/DbwNode.cpp)
 target_link_libraries(dbw ${catkin_LIBRARIES})

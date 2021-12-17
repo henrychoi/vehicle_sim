@@ -1,0 +1,13 @@
+material aruco_left_marker
+{
+	technique
+	{
+		pass
+		{
+			texture_unit
+			{
+		          texture  left_marker.jpg
+			}
+		}
+	}
+}
