@@ -1,0 +1,13 @@
+material column/parking
+{
+	technique
+	{
+		pass
+		{
+			texture_unit
+			{
+				texture column.png
+			}
+		}
+	}
+}
