@@ -56,7 +56,7 @@
     </model>
 
     <model name="ceiling">
-      <pose>0 0 3 0 0 0</pose>
+      <pose>0 0 30 0 0 0</pose>
       <link name="body">
         <visual name="visual">
           <geometry>
@@ -71,14 +71,15 @@
     </model>
 
     <gui>
-      <!-- camera name="chase_cam">
+      <camera name="chase_cam">
         <track_visual>
-          <name>autoware_gazebo</name>
+          <!--name>autoware_gazebo</name-->
+          <name>trailer</name>
           <static>true</static>
           <use_model_frame>true</use_model_frame>
-          <xyz>-1 0 2</xyz>
+          <xyz>0 0 5</xyz>
         </track_visual>
-      </camera-->
+      </camera>
     </gui>
 
     <model name="trailer">

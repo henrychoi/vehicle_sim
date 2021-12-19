@@ -57,22 +57,26 @@ void HC_CC_State_Space::set_filter_parameters(const Motion_Noise &motion_noise,
   ekf_.set_parameters(motion_noise, measurement_noise, controller);
 }
 
-vector<State> HC_CC_State_Space::get_path(const State &state1, const State &state2) const
+vector<Control> HC_CC_State_Space::get_path(const State &state1, const State &state2
+, vector<State>& path) const
 {
   vector<Control> controls = get_controls(state1, state2);
-  return integrate(state1, controls);
+  (void)integrate(state1, controls, path);
+  return controls;
 }
 
-vector<State_With_Covariance> HC_CC_State_Space::get_path_with_covariance(const State_With_Covariance &state1,
-                                                                          const State &state2) const
+vector<Control> HC_CC_State_Space::get_path_with_covariance(
+  const State_With_Covariance &state1, const State &state2
+  , vector<State_With_Covariance>& path_with_covariance) const
 {
   vector<Control> controls = get_controls(state1.state, state2);
-  return integrate_with_covariance(state1, controls);
+  (void)integrate_with_covariance(state1, controls, path_with_covariance);
+  return controls;
 }
 
-vector<State> HC_CC_State_Space::integrate(const State &state, const vector<Control> &controls) const
+vector<State>& HC_CC_State_Space::integrate(
+  const State &state, const vector<Control> &controls, vector<State>& path) const
 {
-  vector<State> path;
   State state_curr, state_next;
   // reserve capacity of path
   int n_states(0);
@@ -92,6 +96,7 @@ vector<State> HC_CC_State_Space::integrate(const State &state, const vector<Cont
 
   for (const auto &control : controls)
   {
+    // printf("integrate control segment %.2f, %.2f, %.2f\n", control.delta_s, control.kappa, control.sigma);
     double delta_s(control.delta_s);
     double abs_delta_s(fabs(delta_s));
     double kappa(control.kappa);
@@ -100,6 +105,7 @@ vector<State> HC_CC_State_Space::integrate(const State &state, const vector<Cont
     // push_back current state if curvature discontinuity
     if (fabs(kappa - state_curr.kappa) > get_epsilon())
     {
+      printf("kappa discountinuity %.2f --> %.2f\n", state_curr.kappa, kappa);
       state_curr.kappa = kappa;
       state_curr.d = sgn(delta_s);
       path.push_back(state_curr);
@@ -126,10 +132,10 @@ vector<State> HC_CC_State_Space::integrate(const State &state, const vector<Cont
   return path;
 }
 
-vector<State_With_Covariance> HC_CC_State_Space::integrate_with_covariance(const State_With_Covariance &state,
-                                                                           const vector<Control> &controls) const
+vector<State_With_Covariance>& HC_CC_State_Space::integrate_with_covariance(
+  const State_With_Covariance &state, const vector<Control> &controls
+  , vector<State_With_Covariance>& path_with_covariance) const
 {
-  vector<State_With_Covariance> path_with_covariance;
   State_With_Covariance state_curr, state_pred, state_next;
   // reserve capacity of path
   int n_states(0);
@@ -277,6 +283,7 @@ inline State HC_CC_State_Space::integrate_ODE(const State &state, const Control 
   double d(sgn(control.delta_s));
   if (fabs(sigma) > get_epsilon())
   {
+    // printf("clothoid sigma %.2f\n", sigma);
     end_of_clothoid(state.x, state.y, state.theta, state.kappa, sigma, d, integration_step, &state_next.x,
                     &state_next.y, &state_next.theta, &state_next.kappa);
     state_next.d = d;
@@ -285,6 +292,7 @@ inline State HC_CC_State_Space::integrate_ODE(const State &state, const Control 
   {
     if (fabs(state.kappa) > get_epsilon())
     {
+      // printf("cicrular kappa %.2f\n", state.kappa);
       end_of_circular_arc(state.x, state.y, state.theta, state.kappa, d, integration_step, &state_next.x, &state_next.y,
                           &state_next.theta);
       state_next.kappa = state.kappa;
@@ -292,6 +300,7 @@ inline State HC_CC_State_Space::integrate_ODE(const State &state, const Control 
     }
     else
     {
+      // printf("straight dir %.0f\n", d);
       end_of_straight_line(state.x, state.y, state.theta, d, integration_step, &state_next.x, &state_next.y);
       state_next.theta = state.theta;
       state_next.kappa = state.kappa;

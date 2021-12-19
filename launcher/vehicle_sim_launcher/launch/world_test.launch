@@ -40,12 +40,18 @@
     <node name="vehicle_input_subscriber" pkg="vehicle_sim_interface"
       type="vehicle_input_subscriber" respawn="false"
           output="screen">
+      <param name="wheel_base" type="double" value="0.267"/>
+      <param name="wheel_tread" type="double" value="0.230"/>
+      <param name="wheel_radius" type="double" value="0.06"/>
       <remap from="cmd_vel" to="/dbw/cmd_vel"/>
     </node>
 
     <node name="vehicle_info_publisher" pkg="vehicle_sim_interface"
       type="vehicle_info_publisher" respawn="false"
           output="screen">
+      <param name="wheel_base" type="double" value="0.267"/>
+      <param name="wheel_tread" type="double" value="0.230"/>
+      <param name="wheel_radius" type="double" value="0.06"/>
     </node>
   </group>
 
@@ -96,7 +102,7 @@
     <param name="throttle_axis" type="int" value="1"/>
     <param name="deadman_btn" type="int" value="4"/> <!-- LR button-->
     <param name="x_btn" type="int" value="8"/> <!-- the "X" button-->
-    <param name="steer_gain" type="double" value="0.5"/>
+    <param name="steer_gain" type="double" value="1.5"/>
     <param name="throttle_gain" type="double" value="10"/>
 
     <!-- <remap from="/aruco/tf_strobe" to="/dbw/tf_strobe"/> -->

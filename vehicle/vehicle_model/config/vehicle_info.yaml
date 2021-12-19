@@ -1,6 +1,7 @@
 wheel_radius: 0.06
 wheel_width: 0.042
 wheel_base: 0.267
+# whee_tread = 0.5 * front track_width
 wheel_tread: 0.230
 vehicle_mass: 100
 vehicle_length: 0.400

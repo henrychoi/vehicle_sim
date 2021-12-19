@@ -43,18 +43,21 @@ public:
   virtual vector<Control> get_controls(const State& state1, const State& state2) const = 0;
 
   /** \brief Returns path from state1 to state2 */
-  vector<State> get_path(const State& state1, const State& state2) const;
+  vector<Control> get_path(const State& state1, const State& state2
+    , vector<State>& path) const;
 
   /** \brief Returns path including covariances from state1 to state2 */
-  vector<State_With_Covariance> get_path_with_covariance(const State_With_Covariance& state1,
-                                                         const State& state2) const;
+  vector<Control> get_path_with_covariance(const State_With_Covariance& state1, const State& state2
+    , vector<State_With_Covariance>& path_with_covariance) const;
 
   /** \brief Returns integrated states given a start state and controls */
-  vector<State> integrate(const State& state, const vector<Control>& controls) const;
+  vector<State>& integrate(const State& state, const vector<Control>& controls
+    , vector<State>& path) const;
 
   /** \brief Returns integrated states including covariance given a start state and controls */
-  vector<State_With_Covariance> integrate_with_covariance(const State_With_Covariance& state,
-                                                          const vector<Control>& controls) const;
+  vector<State_With_Covariance>& integrate_with_covariance(const State_With_Covariance& state
+    , const vector<Control>& controls
+    , vector<State_With_Covariance>& path_with_covariance) const;
 
   /** \brief Returns interpolated state at distance t in [0,1] (percentage of total path length) */
   State interpolate(const State& state, const vector<Control>& controls, double t) const;

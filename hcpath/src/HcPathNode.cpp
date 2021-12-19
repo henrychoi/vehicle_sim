@@ -158,11 +158,11 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 			auto d = pify(yaw_ave - pose.yaw);
 			yaw_var += d*d;
 		}
-		ROS_DEBUG("yaw stat [%.1f, %.2f, %.2f+-sqrt(%.2e)]"
-				, abs(heading_sum), arg(heading_sum), yaw_ave, yaw_var);
+		// ROS_DEBUG("yaw stat [%.1f, %.2f, %.2f+-sqrt(%.2e)]"
+		// 		, abs(heading_sum), arg(heading_sum), yaw_ave, yaw_var);
 		yaw_var *= kPoseAveWeight;
 
-		ROS_INFO("pose stat [%.2f+-%.2e, %.2f+-%.2e, %.2f+-%.2e]"
+		ROS_DEBUG("pose stat [%.2f+-%.2e, %.2f+-%.2e, %.2f+-%.2e]"
 				,  x_ave, x_var,  y_ave, y_var,  yaw_ave, yaw_var);
 
 		// store the current base_link pose (relative to the middle of the trailer)
@@ -181,13 +181,16 @@ void HcPathNode::onGoal() {
 	HCpmpm_Reeds_Shepp_State_Space state_space(kappa_max_, sigma_max_, discretization_);
 	state_space.set_filter_parameters(motion_noise_, measurement_noise_, controller_);
 	State start = { .x = rel_x_ave_, .y = rel_y_ave_
-			, .theta = rel_yaw_ave_, .kappa = 0,
-		}, goal = { .x = 0, .y = 0, .theta = 0, .kappa = 0, .d = 1, };
+			, .theta = rel_yaw_ave_, .kappa = 0, .d = -1
+		}, goal = { .x = 0, .y = 0, .theta = 0, .kappa = 0, .d = -1, };
 	ROS_INFO("path request start [%.2f, %.2f, %.2f] --> [%.2f, %.2f]"
 		, start.x, start.y, start.theta, goal.x, goal.y);
-	vector<State> path = state_space.get_path(start, goal);
+	vector<State> path;
+	vector<Control> segments = state_space.get_path(start, goal, path);
 	auto elapsed = ros::Time::now() - t0;
-	ROS_WARN("Generated path length %zd", path.size());
+	// ROS_WARN("Generated control length %zd", seg.size());
+	for (auto seg: segments)
+		ROS_INFO("control segment %.2f, %.2f, %.2f", seg.delta_s, seg.kappa, seg.sigma);
 
 	nav_msgs::Path nav_path;
 	nav_path.header.frame_id = "trailer";

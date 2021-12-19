@@ -11,7 +11,7 @@ footprint:
 
 path:
   kappa_max: 1.420 # [1/m]
-  sigma_max: 8.353 # [1/m^2]
+  sigma_max: 3 # [1/m^2]
 
   # Check "Vehicle Teleoperation Weekly Meeting_20210910.pptx"
   wheel_base:   0.267  # [m]
