@@ -55,7 +55,7 @@ class HcPathNode {
 
 	struct SimplePose_ { complex<tf2Scalar> heading; tf2Scalar yaw; tf2Scalar T[3]; };
 	boost::circular_buffer<SimplePose_> poseQ_;
-	static constexpr size_t kPoseQSize = 16;
+	static constexpr size_t kPoseQSize = 15;
 	static constexpr double kPoseAveWeight = (1.0/kPoseQSize);
 	tf2Scalar rel_yaw_ave_, rel_yaw_var_, rel_x_ave_, rel_x_var_, rel_y_ave_, rel_y_var_;
 
@@ -162,7 +162,7 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 		// 		, abs(heading_sum), arg(heading_sum), yaw_ave, yaw_var);
 		yaw_var *= kPoseAveWeight;
 
-		ROS_DEBUG("pose stat [%.2f+-%.2e, %.2f+-%.2e, %.2f+-%.2e]"
+		ROS_INFO("pose stat [%.2f+-%.2e, %.2f+-%.2e, %.2f+-%.2e]"
 				,  x_ave, x_var,  y_ave, y_var,  yaw_ave, yaw_var);
 
 		// store the current base_link pose (relative to the middle of the trailer)

@@ -62,7 +62,7 @@
       roll="${calibration['base_link2quad']['roll']}"
       pitch="${calibration['base_link2quad']['pitch']}"
       yaw="${calibration['base_link2quad']['yaw']}"
-      fps="6" width="1280" height="720" fov="1.6"/>
+      fps="15" width="1280" height="720" fov="1.6"/>
   <xacro:imu_macro suffix="imu" parent="base_link" namespace=""
                    x="${calibration['base_link2imu']['x']}"
                    y="${calibration['base_link2imu']['y']}"

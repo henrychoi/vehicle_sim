@@ -35,7 +35,8 @@ public:
 
 private:
 	void onFrame(const sensor_msgs::ImageConstPtr& msg);
-	void onCam2Marker(const geometry_msgs::PoseStampedConstPtr& p);
+	// void onCam2Marker(const geometry_msgs::PoseStampedConstPtr& p);
+	void onCam2Marker(const geometry_msgs::PoseStamped* cam2marker);
 	void onCameraInfo(const sensor_msgs::CameraInfo &msg);
     void onJointState(const sensor_msgs::JointState::ConstPtr &state);
 
@@ -87,10 +88,11 @@ private:
 		Vec3d rvec, tvec;
 	} camState_[4];
 	struct _DetectionScore {
+		ros::Time time;
 		int camId;
 		vector<int> markerIds;
 	};
-	deque<_DetectionScore> detectedQ_; // will be at most 2 elements long
+	deque<_DetectionScore> _detectedQ; // will be at most 2 elements long
 
 
 	struct _DetectionResult {
@@ -123,7 +125,7 @@ Maruco::Maruco()
 , _image3_sub(_it.subscribe("/quad3/image_raw", 1, &Self::onFrame, this))
 , cal0_sub_(_nh.subscribe("/quad0/camera_info", 1 , &Self::onCameraInfo, this))
 , cal2_sub_(_nh.subscribe("/quad2/camera_info", 1 , &Self::onCameraInfo, this))
-, joint_sub_(_nh.subscribe("/autoware_gazebo/joint_states", 1, &Self::onJointState, this))
+// , joint_sub_(_nh.subscribe("/autoware_gazebo/joint_states", 1, &Self::onJointState, this))
 , _cam2marker_pub(_ph.advertise<geometry_msgs::PoseStamped>("cam2marker", 1, true))
 , _tf2_listener(tf2_buffer_)
 , _tf2_filter(_cam2marker_sub, tf2_buffer_, "quad_link", 10, 0)
@@ -175,7 +177,7 @@ Maruco::Maruco()
 #endif
 
 	_cam2marker_sub.subscribe(_ph, "cam2marker", 10);
-  	_tf2_filter.registerCallback(boost::bind(&Self::onCam2Marker, this, _1));
+  	// _tf2_filter.registerCallback(boost::bind(&Self::onCam2Marker, this, _1));
   
   	auto dict = aruco::getPredefinedDictionary(aruco::DICT_4X4_50);
 	vector<int> ids;
@@ -390,7 +392,7 @@ void Maruco::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 		// cvRodrigues2() converts rotation vector to to a 3-by-3 rotation matrix  
 
 		// Record the latest valid board observation score
-		detectedQ_.push_back({camId, markerIds});
+		_detectedQ.push_back({msg->header.stamp, camId, markerIds});
 		auto elapsed = ros::Time::now() - t0;
 		float angle = sqrt(camState_[camId].rvec[0] * camState_[camId].rvec[0]
 						+ camState_[camId].rvec[1] * camState_[camId].rvec[1]
@@ -447,18 +449,25 @@ void Maruco::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 		static uint32_t sSeq = 0;
 		cam2marker.header.seq = ++sSeq;
 
-		// save away the state of each camera
-		_cam2marker_pub.publish(cam2marker);
+		if (true) {
+			onCam2Marker(//boost::shared_ptr<geometry_msgs::PoseStamped>(
+				&cam2marker
+				//)
+				);
+		} else {
+			// save away the state of each camera
+			_cam2marker_pub.publish(cam2marker);
 
-		// yaw = atan2(2.0*(qy*qz + qw*qx), qw*qw - qx*qx - qy*qy + qz*qz);
-		// pitch = asin(-2.0*(qx*qz - qw*qy));
-		// roll = atan2(2.0*(qx*qy + qw*qz), qw*qw + qx*qx - qy*qy - qz*qz);
-		tf2::Vector3 axis = Q.getAxis();
-		ROS_DEBUG(//"%d.%03u "
-			"cam%u (%.2f, %.2f); Q(%.2f, %.2f, %.2f, %.2f) = [%.2f, %.2f, %.2f] %.2f"
-			// , msg->header.stamp.sec, msg->header.stamp.nsec/1000000
-			, camId, cam2marker.pose.position.x, cam2marker.pose.position.y
-			, Q.x(), Q.y(), Q.z(), Q.w(), axis[0], axis[1], axis[2], Q.getAngle());
+			// yaw = atan2(2.0*(qy*qz + qw*qx), qw*qw - qx*qx - qy*qy + qz*qz);
+			// pitch = asin(-2.0*(qx*qz - qw*qy));
+			// roll = atan2(2.0*(qx*qy + qw*qz), qw*qw + qx*qx - qy*qy - qz*qz);
+			tf2::Vector3 axis = Q.getAxis();
+			ROS_DEBUG(//"%d.%03u "
+				"cam%u (%.2f, %.2f); Q(%.2f, %.2f, %.2f, %.2f) = [%.2f, %.2f, %.2f] %.2f"
+				// , msg->header.stamp.sec, msg->header.stamp.nsec/1000000
+				, camId, cam2marker.pose.position.x, cam2marker.pose.position.y
+				, Q.x(), Q.y(), Q.z(), Q.w(), axis[0], axis[1], axis[2], Q.getAngle());
+		}
 		if (_show_axis) { // Show the board frame
 		  	cv::aruco::drawAxis(frame, _intrinsic, _distortion
 			  	, camState_[camId].rvec, camState_[camId].tvec, 0.8);
@@ -473,7 +482,9 @@ void Maruco::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 	}
 }
 
-void Maruco::onCam2Marker(const geometry_msgs::PoseStampedConstPtr& cam2marker) {
+void Maruco::onCam2Marker(//const geometry_msgs::PoseStampedConstPtr& cam2marker
+const geometry_msgs::PoseStamped* cam2marker
+) {
 	// ROS_INFO("onPose with frame %s", cam2marker->header.frame_id.c_str());
 	int camId = cam2marker->header.frame_id[4] - '0';
     geometry_msgs::PoseStamped quad2marker;
@@ -491,23 +502,23 @@ void Maruco::onCam2Marker(const geometry_msgs::PoseStampedConstPtr& cam2marker) 
 			, quad2marker.pose.orientation.z
 			, quad2marker.pose.orientation.w
 		);
-		switch (detectedQ_.size()) {
+		switch (_detectedQ.size()) {
 			case 2: { // I shouldn't finish calculation; save away the result
-				_DetectionScore& det = (detectedQ_.front().camId == camId)
-					? detectedQ_.front() : detectedQ_.back();
+				_DetectionScore& det = (_detectedQ.front().camId == camId)
+					? _detectedQ.front() : _detectedQ.back();
 				other_.score = det.markerIds.size();
 				other_.T = quad2marker.pose.position;
 				other_.Q = Q;
 				other_.valid = true;
-				if (detectedQ_.front().camId == camId) {
-					detectedQ_.pop_front();
+				if (_detectedQ.front().camId == camId) {
+					_detectedQ.pop_front();
 				} else {
-					detectedQ_.pop_back();
+					_detectedQ.pop_back();
 				}
 			}	break;
 
 			case 1: { // average the current result with one stored in other_
-				_DetectionScore& det = detectedQ_.front();
+				_DetectionScore& det = _detectedQ.front();
 				auto score = static_cast<float>(det.markerIds.size());
 				// pose from THIS camera
 				auto T = quad2marker.pose.position;
@@ -521,7 +532,7 @@ void Maruco::onCam2Marker(const geometry_msgs::PoseStampedConstPtr& cam2marker) 
 					T.z = weight * (score * T.z + other_.score * other_.T.z);
 					Qave = other_.Q.slerp(Q, score*weight);
 				}
-				detectedQ_.clear();
+				_detectedQ.clear();
 				other_.valid = false; // consumed result
 
 				if (abs(Qave.length2() - 1.0) > 0.001) { // invalid transform
@@ -536,7 +547,7 @@ void Maruco::onCam2Marker(const geometry_msgs::PoseStampedConstPtr& cam2marker) 
 				double yaw = 0;
 				if (abs(axis[2]) > 0.8) { // rotation axis roughly along vertical
 					// => can assume that the rotation amount is the yaw
-					yaw = Qave.getAngle() * (-2*signbit(axis[2])+1);
+					yaw = Qave.getAngle() * (1 - 2*signbit(axis[2]));
 				}
 #if 0 // To finish implementation, require sufficient position change
 				// static ArucoState_ sPrevObs = { .x = 0, .y = 0, .distSq = 0, .yaw = 0};
@@ -599,9 +610,13 @@ void Maruco::onCam2Marker(const geometry_msgs::PoseStampedConstPtr& cam2marker) 
 			}	break;
 
 			default:
-				ROS_ERROR("Precondition violation: detectedQ_ size %zd ! 1 or 2"
-					, detectedQ_.size());
-				detectedQ_.clear();
+				ROS_ERROR("Precondition violation: _detectedQ size %zd ! 1 or 2"
+					, _detectedQ.size());
+				for (auto& det: _detectedQ) {
+					ROS_ERROR("_detectedQ: %d.%03u, cam %d: %lu markers"
+						, det.time.sec, det.time.nsec/1000000, det.camId, det.markerIds.size());
+				} 
+				_detectedQ.clear();
 		}
 	} catch (tf2::TransformException &ex) {
   	    ROS_ERROR("Transform failure %s\n", ex.what());
