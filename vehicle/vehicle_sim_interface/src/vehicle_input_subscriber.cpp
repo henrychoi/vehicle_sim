@@ -78,12 +78,12 @@ void VehicleInputSubscriber::twistCallback(const geometry_msgs::Twist::ConstPtr 
     output_wheel_left_rear.data = input_twist_msg->linear.x;
 
     double vref_rear = input_twist_msg->linear.x;
-    auto kappa = input_twist_msg->angular.z;
-    if (fabs(kappa) > 1E-4) {
-        auto R = 1.0/kappa
+    auto steer = input_twist_msg->angular.z;
+    if (fabs(steer) > 1E-4) {
+        auto R = 1.0/steer
             , l = std::atan(wheel_base_ / (R - wheel_tread_))
             , r = std::atan(wheel_base_ / (R + wheel_tread_));
-        ROS_INFO("steering kappa %.2f, %.2f, %.2f", kappa, l, r);
+        ROS_DEBUG("steering %.2f, %.2f, %.2f", steer, l, r);
         output_steering_left_front.data  = std::clamp(l, -kMaxSteer, kMaxSteer);
         output_steering_right_front.data = std::clamp(r, -kMaxSteer, kMaxSteer);
     } else {

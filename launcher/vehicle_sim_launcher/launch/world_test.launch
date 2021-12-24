@@ -46,17 +46,13 @@
       <remap from="cmd_vel" to="/dbw/cmd_vel"/>
     </node>
 
-    <node name="vehicle_info_publisher" pkg="vehicle_sim_interface"
-      type="vehicle_info_publisher" respawn="false"
-          output="screen">
-      <param name="wheel_base" type="double" value="0.267"/>
-      <param name="wheel_tread" type="double" value="0.230"/>
-      <param name="wheel_radius" type="double" value="0.06"/>
-    </node>
   </group>
 
   <node name="maruco" pkg="maruco" type="maruco" required="true" output="screen">
     <param name="show_axis" type="bool" value="true"/>
+    <param name="wheel_base" type="double" value="0.267"/>
+    <param name="wheel_tread" type="double" value="0.230"/>
+    <param name="wheel_radius" type="double" value="0.06"/>
   </node>
 
   <!-- have to add the static transform in THIS direction; the parent

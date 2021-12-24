@@ -13,6 +13,7 @@
 
 #include <cv_bridge/cv_bridge.h>
 #include <sensor_msgs/image_encodings.h>
+#include <sensor_msgs/JointState.h>
 #include <image_transport/image_transport.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/transform_broadcaster.h>
@@ -36,8 +37,11 @@ private:
 	void onFrame(const sensor_msgs::ImageConstPtr& msg);
 	void onCam2Marker(const geometry_msgs::PoseStampedConstPtr& p);
 	void onCameraInfo(const sensor_msgs::CameraInfo &msg);
+    void onJointState(const sensor_msgs::JointState::ConstPtr &state);
 
     ros::NodeHandle _nh, _ph;
+
+    double wheel_base_, wheel_tread_, wheel_radius_; // params
 
 	/**
 	 * Camera _intrinsic matrix pre initialized with _intrinsic values for the test camera.
@@ -59,6 +63,7 @@ private:
 	image_transport::Publisher debug_img_pub;
 	image_transport::Subscriber _image0_sub, _image1_sub, _image2_sub, _image3_sub;
 	ros::Subscriber cal0_sub_, cal2_sub_;
+    ros::Subscriber joint_sub_;
 
 	tf2_ros::TransformBroadcaster _br;
 	tf2_ros::Buffer tf2_buffer_;
@@ -95,7 +100,219 @@ private:
 		tf2::Quaternion Q;
 	} other_;
 	// queue<_DetectionResult> resQ_;
+
+	struct BicycleState_ { ros::Time time; double k, ds; //, abs_ds;
+	};
+	deque<BicycleState_> _bicycleQ;
+
+	struct ArucoState_ { ros::Time time;
+		double x, y, yaw
+			, distSq; // relative to the Maruco marker (trailer); for variance est
+	};
+	deque<ArucoState_> _visualQ;
 };
+
+
+Maruco::Maruco()
+: _nh("maruco"), _ph("~")
+, _it(_nh)
+, debug_img_pub(_it.advertise("/aruco/debug", 1))
+, _image0_sub(_it.subscribe("/quad0/image_raw", 1, &Self::onFrame, this))
+, _image1_sub(_it.subscribe("/quad1/image_raw", 1, &Self::onFrame, this))
+, _image2_sub(_it.subscribe("/quad2/image_raw", 1, &Self::onFrame, this))
+, _image3_sub(_it.subscribe("/quad3/image_raw", 1, &Self::onFrame, this))
+, cal0_sub_(_nh.subscribe("/quad0/camera_info", 1 , &Self::onCameraInfo, this))
+, cal2_sub_(_nh.subscribe("/quad2/camera_info", 1 , &Self::onCameraInfo, this))
+, joint_sub_(_nh.subscribe("/autoware_gazebo/joint_states", 1, &Self::onJointState, this))
+, _cam2marker_pub(_ph.advertise<geometry_msgs::PoseStamped>("cam2marker", 1, true))
+, _tf2_listener(tf2_buffer_)
+, _tf2_filter(_cam2marker_sub, tf2_buffer_, "quad_link", 10, 0)
+, aruco_tf_strobe_(_nh.advertise<std_msgs::Header>("/aruco/tf_strobe", 1, true))
+{
+	assert(_nh.param("show_axis", _show_axis, false));
+    _nh.param("wheel_base", wheel_base_, 0.267);
+    _nh.param("wheel_radius", wheel_radius_, 0.06);
+    _nh.param("wheel_tread", wheel_tread_, 0.23); // wheel_tread = 0.5 * track width
+
+	_nh.param("calibrated", _calibrated, false);
+
+	// assert(_show_axis);
+
+	//Camera instrinsic _intrinsic parameters
+	if(_nh.hasParam("calibration")) {
+	#if 1 // TODO ROS param can be a vector of double too!
+	#else
+		string data;
+		_nh.param<string>("calibration", data, "");
+		
+		double values[9];
+		stringToDoubleArray(data, values, 9, "_");
+
+		for(unsigned int i = 0; i < 9; i++)
+		{
+			_intrinsic.at<double>(i / 3, i % 3) = values[i];
+		}
+	#endif
+	}
+
+#if 0
+	//Camera _distortion _intrinsic parameters
+	if(_nh.hasParam("distortion"))
+	{
+		string data;
+		_nh.param<string>("distortion", data, "");	
+
+		double values[5];
+		stringToDoubleArray(data, values, 5, "_");
+
+		for(unsigned int i = 0; i < 5; i++)
+		{
+			_distortion.at<double>(0, i) = values[i];
+		}
+
+		_calibrated = true;
+	}
+#endif
+
+	_cam2marker_sub.subscribe(_ph, "cam2marker", 10);
+  	_tf2_filter.registerCallback(boost::bind(&Self::onCam2Marker, this, _1));
+  
+  	auto dict = aruco::getPredefinedDictionary(aruco::DICT_4X4_50);
+	vector<int> ids;
+	for (auto i=0; i < 2*(6+8); ++i) {
+		ids.push_back(i);
+	}
+
+
+	vector<vector<cv::Point3f>> corners;
+	//front
+	corners.push_back({Point3f(	+0.255,		-0.15	,	+0.375)// top row
+					, Point3f(	+0.085,		-0.15	,	+0.375)
+					, Point3f(	+0.085,		-0		,	+0.375)
+					, Point3f(	+0.255,		-0		,	+0.375)});
+	corners.push_back({Point3f(	+0.085,		-0.15	,	+0.375)
+					, Point3f(	-0.085,		-0.15	,	+0.375)
+					, Point3f(	-0.085,		-0		,	+0.375)
+					, Point3f(	+0.085,		-0		,	+0.375)});
+	corners.push_back({Point3f(	-0.085,		-0.15	,	+0.375)
+					, Point3f(	-0.255,		-0.15	,	+0.375)
+					, Point3f(	-0.255,		-0		,	+0.375)
+					, Point3f(	-0.085,		-0		,	+0.375)});
+	corners.push_back({Point3f(	+0.255,		+0		,	+0.375)// bottom row
+					, Point3f(	+0.085,		+0		,	+0.375)
+					, Point3f(	+0.085,		+0.15	,	+0.375)
+					, Point3f(	+0.255,		+0.15	,	+0.375)});
+	corners.push_back({Point3f(	+0.085,		+0		,	+0.375)
+					, Point3f(	-0.085,		+0		,	+0.375)
+					, Point3f(	-0.085,		+0.15	,	+0.375)
+					, Point3f(	+0.085,		+0.15	,	+0.375)});
+	corners.push_back({Point3f(	-0.085,		+0		,	+0.375)
+					, Point3f(	-0.255,		+0		,	+0.375)
+					, Point3f(	-0.255,		+0.15	,	+0.375)
+					, Point3f(	-0.085,		+0.15	,	+0.375)});
+	// right,		
+	corners.push_back({Point3f(	+0.255,		-0.15	,	-0.375	)// top row
+					, Point3f(	+0.255,		-0.15	,	-0.1875)
+					, Point3f(	+0.255,		-0		,	-0.1875)
+					, Point3f(	+0.255,		-0		,	-0.375	)});
+	corners.push_back({Point3f(	+0.255,		-0.15	,	-0.1875)
+					, Point3f(	+0.255,		-0.15	,	-0	)
+					, Point3f(	+0.255,		-0		,	-0	)
+					, Point3f(	+0.255,		-0		,	-0.1875)});
+	corners.push_back({Point3f(	+0.255,		-0.15	,	+0	)
+					, Point3f(	+0.255,		-0.15	,	+0.1875)
+					, Point3f(	+0.255,		-0		,	+0.1875)
+					, Point3f(	+0.255,		-0		,	+0	)});
+	corners.push_back({Point3f(	+0.255,		-0.15	,	+0.1875)
+					, Point3f(	+0.255,		-0.15	,	+0.375	)
+					, Point3f(	+0.255,		-0		,	+0.375	)
+					, Point3f(	+0.255,		-0		,	+0.187	)});
+	corners.push_back({Point3f(	+0.255,		+0		,	-0.375	)// bottom row
+					, Point3f(	+0.255,		+0		,	-0.1875)
+					, Point3f(	+0.255,		+0.15	,	-0.1875)
+					, Point3f(	+0.255,		+0.15	,	-0.375	)});
+	corners.push_back({Point3f(	+0.255,		+0		,	-0.1875)
+					, Point3f(	+0.255,		+0		,	-0	)
+					, Point3f(	+0.255,		+0.15	,	-0	)
+					, Point3f(	+0.255,		+0.15	,	-0.1875)});
+	corners.push_back({Point3f(	+0.255,		+0		,	+0	)
+					, Point3f(	+0.255,		+0		,	+0.1875)
+					, Point3f(	+0.255,		+0.15	,	+0.1875)
+					, Point3f(	+0.255,		+0.15	,	+0	)});
+	corners.push_back({Point3f(	+0.255,		+0		,	+0.1875)
+					, Point3f(	+0.255,		+0		,	+0.375	)
+					, Point3f(	+0.255,		+0.15	,	+0.375	)
+					, Point3f(	+0.255,		+0.15	,	+0.1875)});
+	// rear,		
+	corners.push_back({Point3f(	-0.255,		-0.15	,	-0.375)// top row
+					, Point3f(	-0.085,		-0.15	,	-0.375)
+					, Point3f(	-0.085,		-0		,	-0.375)
+					, Point3f(	-0.255,		-0		,	-0.375)});
+	corners.push_back({Point3f(	-0.085,		-0.15	,	-0.375)
+					, Point3f(	+0.085,		-0.15	,	-0.375)
+					, Point3f(	+0.085,		-0		,	-0.375)
+					, Point3f(	-0.085,		-0		,	-0.375)});
+	corners.push_back({Point3f(	+0.085,		-0.15	,	-0.375)
+					, Point3f(	+0.255,		-0.15	,	-0.375)
+					, Point3f(	+0.255,		-0		,	-0.375)
+					, Point3f(	+0.085,		-0		,	-0.375)});
+	corners.push_back({Point3f(	-0.255,		+0		,	-0.375)// bottom row
+					, Point3f(	-0.085,		+0		,	-0.375)
+					, Point3f(	-0.085,		+0.15	,	-0.375)
+					, Point3f(	-0.255,		+0.15	,	-0.375)});
+	corners.push_back({Point3f(	-0.085,		+0		,	-0.375)
+					, Point3f(	+0.085,		+0		,	-0.375)
+					, Point3f(	+0.085,		+0.15	,	-0.375)
+					, Point3f(	-0.085,		+0.15	,	-0.375)});
+	corners.push_back({Point3f(	+0.085,		+0		,	-0.375)
+					, Point3f(	+0.255,		+0		,	-0.375)
+					, Point3f(	+0.255,		+0.15	,	-0.375)
+					, Point3f(	+0.085,		+0.15	,	-0.375)});
+	// left,		
+	corners.push_back({Point3f(	-0.255,		-0.15	,	+0.375)// top row
+					, Point3f(	-0.255,		-0.15	,	+0.1875)
+					, Point3f(	-0.255,		-0		,	+0.1875)
+					, Point3f(	-0.255,		-0		,	+0.375)});
+	corners.push_back({Point3f(	-0.255,		-0.15	,	+0.1875)
+					, Point3f(	-0.255,		-0.15	,	+0	)
+					, Point3f(	-0.255,		-0		,	+0	)
+					, Point3f(	-0.255,		-0		,	+0.1875)});
+	corners.push_back({Point3f(	-0.255,		-0.15	,	-0	)
+					, Point3f(	-0.255,		-0.15	,	-0.1875)
+					, Point3f(	-0.255,		-0		,	-0.1875)
+					, Point3f(	-0.255,		-0		,	-0	)});
+	corners.push_back({Point3f(	-0.255,		-0.15	,	-0.1875)
+					, Point3f(	-0.255,		-0.15	,	-0.375	)
+					, Point3f(	-0.255,		-0		,	-0.375)
+					, Point3f(	-0.255,		-0		,	-0.1875)});
+	corners.push_back({Point3f(	-0.255,		+0		,	+0.375)// bottom row
+					, Point3f(	-0.255,		+0		,	+0.1875)
+					, Point3f(	-0.255,		+0.15	,	+0.1875)
+					, Point3f(	-0.255,		+0.15	,	+0.375)});
+	corners.push_back({Point3f(	-0.255,		+0		,	+0.1875)
+					, Point3f(	-0.255,		+0		,	+0.0)
+					, Point3f(	-0.255,		+0.15	,	+0.0)
+					, Point3f(	-0.255,		+0.15	,	+0.1875)});
+	corners.push_back({Point3f(	-0.255,		+0		,	-0	)
+					, Point3f(	-0.255, 	+0		,	-0.1875)
+					, Point3f(	-0.255,		+0.15	,	-0.1875)
+					, Point3f(	-0.255,		+0.15	,	-0	)});
+	corners.push_back({Point3f(	-0.255,		+0		,	-0.1875)
+					, Point3f(	-0.255,		+0		,	-0.375	)
+					, Point3f(	-0.255,		+0.15	,	-0.375	)
+					, Point3f(	-0.255,		+0.15	,	-0.1875)});
+	assert(ids.size() == corners.size());	
+
+	board_ = aruco::Board::create(InputArrayOfArrays(corners), dict, InputArray(ids));
+}
+
+int main(int argc, char **argv) {
+	ros::init(argc, argv, "maruco");
+	Maruco pub;
+	ros::spin();
+
+	return 0;
+}
 
 /*
  * CV array type to ROS sensor_msgs/Image type
@@ -318,10 +535,34 @@ void Maruco::onCam2Marker(const geometry_msgs::PoseStampedConstPtr& cam2marker) 
 				// Assume the vehicle ONLY yaws
 				double yaw = 0;
 				if (abs(axis[2]) > 0.8) { // rotation axis roughly along vertical
-					// => can assume that the rotation amount is the 
+					// => can assume that the rotation amount is the yaw
 					yaw = Qave.getAngle() * (-2*signbit(axis[2])+1);
 				}
-
+#if 0 // To finish implementation, require sufficient position change
+				// static ArucoState_ sPrevObs = { .x = 0, .y = 0, .distSq = 0, .yaw = 0};
+				// insert into observation history
+				ArucoState_ obs { .time = xf.header.stamp
+					, .x = T.x, .y = T.y, .yaw = yaw
+					, .distSq = T.x*T.x + T.y*T.y
+				};
+				int index = -1;
+				bool prune = false;
+				double dsSum = 0, xPrev = obs.x, yPrev = obs.y;
+				for (auto& visual: _visualQ) {
+					++index;
+					auto dx = xPrev - visual.x, dy = yPrev - visual.y;
+					dsSum += sqrt(dx*dx + dy*dx);
+					xPrev = visual.x, yPrev = visual.y;
+					if (dsSum > 1) {
+						prune = true;
+						break;
+					}
+				}
+				if (prune) {
+					_visualQ.resize(index); // O(N - index)
+				}
+				_visualQ.push_front(obs);
+#endif
 				xf.child_frame_id = "trailer"; // aruco and trailer are coincident
 				xf.transform.translation.x = T.x;
 				xf.transform.translation.y = T.y;
@@ -409,198 +650,82 @@ void stringToDoubleArray(string data, double* values, unsigned int count, string
 	}
 }
 
-Maruco::Maruco()
-: _nh("maruco"), _ph("~")
-, _it(_nh)
-, debug_img_pub(_it.advertise("/aruco/debug", 1))
-, _image0_sub(_it.subscribe("/quad0/image_raw", 1, &Self::onFrame, this))
-, _image1_sub(_it.subscribe("/quad1/image_raw", 1, &Self::onFrame, this))
-, _image2_sub(_it.subscribe("/quad2/image_raw", 1, &Self::onFrame, this))
-, _image3_sub(_it.subscribe("/quad3/image_raw", 1, &Self::onFrame, this))
-, cal0_sub_(_nh.subscribe("/quad0/camera_info", 1 , &Self::onCameraInfo, this))
-, cal2_sub_(_nh.subscribe("/quad2/camera_info", 1 , &Self::onCameraInfo, this))
-, _cam2marker_pub(_ph.advertise<geometry_msgs::PoseStamped>("cam2marker", 1, true))
-, _tf2_listener(tf2_buffer_)
-, _tf2_filter(_cam2marker_sub, tf2_buffer_, "quad_link", 10, 0)
-, aruco_tf_strobe_(_nh.advertise<std_msgs::Header>("/aruco/tf_strobe", 1, true))
+void Maruco::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 {
-	assert(_nh.param("show_axis", _show_axis, false));
-	_nh.param("calibrated", _calibrated, false);
-
-	// assert(_show_axis);
-
-	//Camera instrinsic _intrinsic parameters
-	if(_nh.hasParam("calibration")) {
-	#if 1 // TODO ROS param can be a vector of double too!
-	#else
-		string data;
-		_nh.param<string>("calibration", data, "");
-		
-		double values[9];
-		stringToDoubleArray(data, values, 9, "_");
-
-		for(unsigned int i = 0; i < 9; i++)
-		{
-			_intrinsic.at<double>(i / 3, i % 3) = values[i];
+    double dr = 0, dl = 0, wl = 0, wr = 0, sl = 0, sr = 0;
+    for (auto i = 0; i < state->name.size(); ++i) {
+        if (state->name.at(i) == "steering_right_front_joint")
+            dr = state->position.at(i);
+        if (state->name.at(i) == "steering_left_front_joint")
+            dl = state->position.at(i);
+        if (state->name.at(i) == "wheel_right_front_joint") {
+            wr = state->velocity.at(i);
+			sr = state->position.at(i);
 		}
-	#endif
-	}
-
-#if 0
-	//Camera _distortion _intrinsic parameters
-	if(_nh.hasParam("distortion"))
-	{
-		string data;
-		_nh.param<string>("distortion", data, "");	
-
-		double values[5];
-		stringToDoubleArray(data, values, 5, "_");
-
-		for(unsigned int i = 0; i < 5; i++)
-		{
-			_distortion.at<double>(0, i) = values[i];
+        if (state->name.at(i) == "wheel_left_front_joint") {
+            wl = state->velocity.at(i);
+			sl = state->position.at(i);
 		}
+    }
+    double kl = 0, kr = 0;
+    if (abs(dl) > 1E-4) {
+        auto tan = std::tan(dl);
+        kl = tan / (wheel_base_ + wheel_tread_ * tan);
+    }
+    if (abs(dr) > 1E-4) {
+        auto tan = std::tan(dr);
+        kr = tan / (wheel_base_ - wheel_tread_ * tan);
+    }
+    
+    auto k = 0.5 * (kl + kr); // average curvature
+    // 0.5 * (wl + wr); // average wheel rotation speed
+	static double sPrevS = 0;
+	auto s = 0.5 * (sl + sr) // current wheel angle
+		, ds = s - sPrevS; // displacement along the path
+	static ros::Time sPrevTime(0);
+	const auto duration = state->header.stamp - sPrevTime;
+	const auto dt = (float)duration.sec + 1E-9 * duration.nsec;
+	static double kSum = 0, durationSum = 0;
+	static unsigned kN = 0; ++kN;
+	if (fabs(ds) > 0.05 * M_PI) {
+		// accept the displacement and the average curvature into history
+		// state->header.stamp, k_ave, ds
+		kSum += k * dt; durationSum += dt;
+		auto kAve = kSum / durationSum; // kN;
+		ROS_DEBUG("Maruco observed displacement %d.%03u %.2g %.2f %.2f"
+				, state->header.stamp.sec, state->header.stamp.nsec/1000000
+				, kSum, durationSum, ds);
+		sPrevS = s;
+		kSum = 0; kN = 0; durationSum = 0; // reset the curvature stat
 
-		_calibrated = true;
+		const BicycleState_ cycle { .time = state->header.stamp
+			, .k = kAve, .ds = ds //, .abs_ds = fabs(ds)
+		}; 
+		_bicycleQ.push_front(cycle);
+
+		int index = -1;
+		bool prune = false;
+		double dsSum = 0;
+		for (auto& cycle: _bicycleQ) {
+			++index;
+			dsSum += cycle.ds;
+			if (fabs(dsSum) > 2 * M_PI) { // want to have at least 1 wheel turn 
+				auto ago = state->header.stamp - cycle.time; // > 0
+				if (ago.sec > 3) {
+					prune = true;
+					ROS_DEBUG("Would prune bicycle history at [%d] %d sec ago"
+							, index, ago.sec);
+					break;
+				}
+			}
+		}
+		if (prune) {
+			_bicycleQ.resize(index); // O(N - index)
+		}
+		// ROS_INFO("bicycle queue %zd long", _bicycleQ.size());
+	} else { // update the curvature sum with duration weighted curvature
+		kSum += k * dt; durationSum += dt;
 	}
-#endif
+	sPrevTime = state->header.stamp; 
 
-	_cam2marker_sub.subscribe(_ph, "cam2marker", 10);
-  	_tf2_filter.registerCallback(boost::bind(&Self::onCam2Marker, this, _1));
-  
-  	auto dict = aruco::getPredefinedDictionary(aruco::DICT_4X4_50);
-	vector<int> ids;
-	for (auto i=0; i < 2*(6+8); ++i) {
-		ids.push_back(i);
-	}
-
-
-	vector<vector<cv::Point3f>> corners;
-	//front
-	corners.push_back({Point3f(	+0.255,		-0.15	,	+0.375)// top row
-					, Point3f(	+0.085,		-0.15	,	+0.375)
-					, Point3f(	+0.085,		-0		,	+0.375)
-					, Point3f(	+0.255,		-0		,	+0.375)});
-	corners.push_back({Point3f(	+0.085,		-0.15	,	+0.375)
-					, Point3f(	-0.085,		-0.15	,	+0.375)
-					, Point3f(	-0.085,		-0		,	+0.375)
-					, Point3f(	+0.085,		-0		,	+0.375)});
-	corners.push_back({Point3f(	-0.085,		-0.15	,	+0.375)
-					, Point3f(	-0.255,		-0.15	,	+0.375)
-					, Point3f(	-0.255,		-0		,	+0.375)
-					, Point3f(	-0.085,		-0		,	+0.375)});
-	corners.push_back({Point3f(	+0.255,		+0		,	+0.375)// bottom row
-					, Point3f(	+0.085,		+0		,	+0.375)
-					, Point3f(	+0.085,		+0.15	,	+0.375)
-					, Point3f(	+0.255,		+0.15	,	+0.375)});
-	corners.push_back({Point3f(	+0.085,		+0		,	+0.375)
-					, Point3f(	-0.085,		+0		,	+0.375)
-					, Point3f(	-0.085,		+0.15	,	+0.375)
-					, Point3f(	+0.085,		+0.15	,	+0.375)});
-	corners.push_back({Point3f(	-0.085,		+0		,	+0.375)
-					, Point3f(	-0.255,		+0		,	+0.375)
-					, Point3f(	-0.255,		+0.15	,	+0.375)
-					, Point3f(	-0.085,		+0.15	,	+0.375)});
-	// right,		
-	corners.push_back({Point3f(	+0.255,		-0.15	,	-0.375	)// top row
-					, Point3f(	+0.255,		-0.15	,	-0.1875)
-					, Point3f(	+0.255,		-0		,	-0.1875)
-					, Point3f(	+0.255,		-0		,	-0.375	)});
-	corners.push_back({Point3f(	+0.255,		-0.15	,	-0.1875)
-					, Point3f(	+0.255,		-0.15	,	-0	)
-					, Point3f(	+0.255,		-0		,	-0	)
-					, Point3f(	+0.255,		-0		,	-0.1875)});
-	corners.push_back({Point3f(	+0.255,		-0.15	,	+0	)
-					, Point3f(	+0.255,		-0.15	,	+0.1875)
-					, Point3f(	+0.255,		-0		,	+0.1875)
-					, Point3f(	+0.255,		-0		,	+0	)});
-	corners.push_back({Point3f(	+0.255,		-0.15	,	+0.1875)
-					, Point3f(	+0.255,		-0.15	,	+0.375	)
-					, Point3f(	+0.255,		-0		,	+0.375	)
-					, Point3f(	+0.255,		-0		,	+0.187	)});
-	corners.push_back({Point3f(	+0.255,		+0		,	-0.375	)// bottom row
-					, Point3f(	+0.255,		+0		,	-0.1875)
-					, Point3f(	+0.255,		+0.15	,	-0.1875)
-					, Point3f(	+0.255,		+0.15	,	-0.375	)});
-	corners.push_back({Point3f(	+0.255,		+0		,	-0.1875)
-					, Point3f(	+0.255,		+0		,	-0	)
-					, Point3f(	+0.255,		+0.15	,	-0	)
-					, Point3f(	+0.255,		+0.15	,	-0.1875)});
-	corners.push_back({Point3f(	+0.255,		+0		,	+0	)
-					, Point3f(	+0.255,		+0		,	+0.1875)
-					, Point3f(	+0.255,		+0.15	,	+0.1875)
-					, Point3f(	+0.255,		+0.15	,	+0	)});
-	corners.push_back({Point3f(	+0.255,		+0		,	+0.1875)
-					, Point3f(	+0.255,		+0		,	+0.375	)
-					, Point3f(	+0.255,		+0.15	,	+0.375	)
-					, Point3f(	+0.255,		+0.15	,	+0.1875)});
-	// rear,		
-	corners.push_back({Point3f(	-0.255,		-0.15	,	-0.375)// top row
-					, Point3f(	-0.085,		-0.15	,	-0.375)
-					, Point3f(	-0.085,		-0		,	-0.375)
-					, Point3f(	-0.255,		-0		,	-0.375)});
-	corners.push_back({Point3f(	-0.085,		-0.15	,	-0.375)
-					, Point3f(	+0.085,		-0.15	,	-0.375)
-					, Point3f(	+0.085,		-0		,	-0.375)
-					, Point3f(	-0.085,		-0		,	-0.375)});
-	corners.push_back({Point3f(	+0.085,		-0.15	,	-0.375)
-					, Point3f(	+0.255,		-0.15	,	-0.375)
-					, Point3f(	+0.255,		-0		,	-0.375)
-					, Point3f(	+0.085,		-0		,	-0.375)});
-	corners.push_back({Point3f(	-0.255,		+0		,	-0.375)// bottom row
-					, Point3f(	-0.085,		+0		,	-0.375)
-					, Point3f(	-0.085,		+0.15	,	-0.375)
-					, Point3f(	-0.255,		+0.15	,	-0.375)});
-	corners.push_back({Point3f(	-0.085,		+0		,	-0.375)
-					, Point3f(	+0.085,		+0		,	-0.375)
-					, Point3f(	+0.085,		+0.15	,	-0.375)
-					, Point3f(	-0.085,		+0.15	,	-0.375)});
-	corners.push_back({Point3f(	+0.085,		+0		,	-0.375)
-					, Point3f(	+0.255,		+0		,	-0.375)
-					, Point3f(	+0.255,		+0.15	,	-0.375)
-					, Point3f(	+0.085,		+0.15	,	-0.375)});
-	// left,		
-	corners.push_back({Point3f(	-0.255,		-0.15	,	+0.375)// top row
-					, Point3f(	-0.255,		-0.15	,	+0.1875)
-					, Point3f(	-0.255,		-0		,	+0.1875)
-					, Point3f(	-0.255,		-0		,	+0.375)});
-	corners.push_back({Point3f(	-0.255,		-0.15	,	+0.1875)
-					, Point3f(	-0.255,		-0.15	,	+0	)
-					, Point3f(	-0.255,		-0		,	+0	)
-					, Point3f(	-0.255,		-0		,	+0.1875)});
-	corners.push_back({Point3f(	-0.255,		-0.15	,	-0	)
-					, Point3f(	-0.255,		-0.15	,	-0.1875)
-					, Point3f(	-0.255,		-0		,	-0.1875)
-					, Point3f(	-0.255,		-0		,	-0	)});
-	corners.push_back({Point3f(	-0.255,		-0.15	,	-0.1875)
-					, Point3f(	-0.255,		-0.15	,	-0.375	)
-					, Point3f(	-0.255,		-0		,	-0.375)
-					, Point3f(	-0.255,		-0		,	-0.1875)});
-	corners.push_back({Point3f(	-0.255,		+0		,	+0.375)// bottom row
-					, Point3f(	-0.255,		+0		,	+0.1875)
-					, Point3f(	-0.255,		+0.15	,	+0.1875)
-					, Point3f(	-0.255,		+0.15	,	+0.375)});
-	corners.push_back({Point3f(	-0.255,		+0		,	+0.1875)
-					, Point3f(	-0.255,		+0		,	+0.0)
-					, Point3f(	-0.255,		+0.15	,	+0.0)
-					, Point3f(	-0.255,		+0.15	,	+0.1875)});
-	corners.push_back({Point3f(	-0.255,		+0		,	-0	)
-					, Point3f(	-0.255, 	+0		,	-0.1875)
-					, Point3f(	-0.255,		+0.15	,	-0.1875)
-					, Point3f(	-0.255,		+0.15	,	-0	)});
-	corners.push_back({Point3f(	-0.255,		+0		,	-0.1875)
-					, Point3f(	-0.255,		+0		,	-0.375	)
-					, Point3f(	-0.255,		+0.15	,	-0.375	)
-					, Point3f(	-0.255,		+0.15	,	-0.1875)});
-	assert(ids.size() == corners.size());	
-
-	board_ = aruco::Board::create(InputArrayOfArrays(corners), dict, InputArray(ids));
-}
-
-int main(int argc, char **argv) {
-	ros::init(argc, argv, "maruco");
-	Maruco pub;
-	ros::spin();
-
-	return 0;
 }
