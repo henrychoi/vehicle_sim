@@ -68,8 +68,8 @@ void DbwNode::onInput(const sensor_msgs::Joy::ConstPtr& input) {
 	if (input->buttons[deadman_btn_]) {
 		vel.angular.z = steer_gain_ * input->axes[steer_axis_];
 		vel.linear.x = throttle_gain_ * input->axes[throttle_axis_];
+		pub_.publish(vel);
 	}
-	pub_.publish(vel);
 
 	xQ_.push_back((int8_t)input->buttons[x_btn_]);
 	int8_t xSum = std::accumulate(xQ_.begin(), xQ_.end(), 0);

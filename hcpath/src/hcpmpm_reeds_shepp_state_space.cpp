@@ -1799,7 +1799,7 @@ HC_CC_RS_Path *HCpmpm_Reeds_Shepp_State_Space::hcpmpm_reeds_shepp(const State &s
   //      cout << endl;
   //    }
   //  }
-   cout << "shortest path: " << (int)best_path << endl;
+  //  cout << "shortest path: " << (int)best_path << endl;
    path[best_path]->print(true);
 
   // clean up

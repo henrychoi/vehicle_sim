@@ -73,7 +73,6 @@
     <gui>
       <camera name="chase_cam">
         <track_visual>
-          <!--name>autoware_gazebo</name-->
           <name>trailer</name>
           <static>true</static>
           <use_model_frame>true</use_model_frame>

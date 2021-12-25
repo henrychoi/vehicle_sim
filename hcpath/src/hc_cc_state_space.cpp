@@ -105,7 +105,7 @@ vector<State>& HC_CC_State_Space::integrate(
     // push_back current state if curvature discontinuity
     if (fabs(kappa - state_curr.kappa) > get_epsilon())
     {
-      printf("kappa discountinuity %.2f --> %.2f\n", state_curr.kappa, kappa);
+      // printf("kappa discontinuity %.2f --> %.2f\n", state_curr.kappa, kappa);
       state_curr.kappa = kappa;
       state_curr.d = sgn(delta_s);
       path.push_back(state_curr);

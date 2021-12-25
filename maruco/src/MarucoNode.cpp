@@ -42,7 +42,7 @@ private:
 
     ros::NodeHandle _nh, _ph;
 
-    double wheel_base_, wheel_tread_, wheel_radius_; // params
+    double _wheel_base, _wheel_tread, _wheel_radius; // params
 
 	/**
 	 * Camera _intrinsic matrix pre initialized with _intrinsic values for the test camera.
@@ -132,9 +132,9 @@ Maruco::Maruco()
 , aruco_tf_strobe_(_nh.advertise<std_msgs::Header>("/aruco/tf_strobe", 1, true))
 {
 	assert(_nh.param("show_axis", _show_axis, false));
-    _nh.param("wheel_base", wheel_base_, 0.267);
-    _nh.param("wheel_radius", wheel_radius_, 0.06);
-    _nh.param("wheel_tread", wheel_tread_, 0.23); // wheel_tread = 0.5 * track width
+    _nh.param("wheel_base", _wheel_base, 0.267);
+    _nh.param("wheel_radius", _wheel_radius, 0.06);
+    _nh.param("wheel_tread", _wheel_tread, 0.23); // wheel_tread = 0.5 * track width
 
 	_nh.param("calibrated", _calibrated, false);
 
@@ -685,11 +685,11 @@ void Maruco::onJointState(const sensor_msgs::JointState::ConstPtr &state)
     double kl = 0, kr = 0;
     if (abs(dl) > 1E-4) {
         auto tan = std::tan(dl);
-        kl = tan / (wheel_base_ + wheel_tread_ * tan);
+        kl = tan / (_wheel_base + _wheel_tread * tan);
     }
     if (abs(dr) > 1E-4) {
         auto tan = std::tan(dr);
-        kr = tan / (wheel_base_ - wheel_tread_ * tan);
+        kr = tan / (_wheel_base - _wheel_tread * tan);
     }
     
     auto k = 0.5 * (kl + kr); // average curvature

@@ -308,7 +308,7 @@ Visualization Manager:
         Z: 0
       Pose Color: 255; 85; 255
       Pose Style: None
-      Queue Size: 10
+      Queue Size: 1
       Radius: 0.029999999329447746
       Shaft Diameter: 0.10000000149011612
       Shaft Length: 0.10000000149011612
@@ -354,8 +354,8 @@ Visualization Manager:
       Near Clip Distance: 0.009999999776482582
       Scale: 259.9479675292969
       Target Frame: <Fixed Frame>
-      X: 1.8579416275024414
-      Y: 0.11176672577857971
+      X: -0.1655399203300476
+      Y: 0.04252214729785919
     Saved: ~
 Window Geometry:
   Displays:
