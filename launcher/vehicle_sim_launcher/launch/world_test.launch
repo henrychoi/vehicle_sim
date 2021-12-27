@@ -108,6 +108,7 @@
   <rosparam command="load" file="$(find vehicle_model)/config/path.yaml" />
   <!-- the path planning server -->
   <node name="hcpath" pkg="hcpath" type="hcpath" required="true" output="screen">
+    <param name="deadman_btn" type="int" value="4"/> <!-- LR button-->
     <param name="Kforward_s" type="double" value="10"/>
     <param name="Kback_axial" type="double" value="50"/>
     <param name="Kback_intaxial" type="double" value="0.1"/>

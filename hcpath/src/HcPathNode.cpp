@@ -3,6 +3,7 @@
 
 #include <ros/ros.h>
 #include <ros/console.h>
+#include <sensor_msgs/Joy.h>
 #include <sensor_msgs/JointState.h>
 #include <tf2/LinearMath/Quaternion.h>
 #include <tf2_ros/buffer.h>
@@ -41,6 +42,11 @@ class HcPathNode {
 	ros::Publisher _path_pub, _rw_pub, _lw_pub, _rd_pub, _ld_pub;
 	ros::Subscriber tf_strobe_sub_;
     ros::Subscriber joint_sub_;
+
+	ros::Subscriber joy_sub_;
+    int _deadman_btn;
+	bool _manualOverride = false;
+
 	// ros::ServiceServer server_;
 	actionlib::SimpleActionServer<hcpath::parkAction> as_;
 	parkFeedback feedback_;
@@ -86,6 +92,9 @@ class HcPathNode {
 	void onGoal();
 	void onRequest(const parkGoalConstPtr& goal);
 	void onJointState(const sensor_msgs::JointState::ConstPtr &state);
+	void onJoy(const sensor_msgs::Joy::ConstPtr& joy) {
+		_manualOverride = joy->buttons[_deadman_btn];
+	}
 public:
 	HcPathNode();
 };
@@ -112,12 +121,16 @@ HcPathNode::HcPathNode()
 		"steering_left_front_position_controller/command", 1, true))
 , tf_strobe_sub_(_nh.subscribe<std_msgs::Header>("/aruco/tf_strobe", 10, &Self::onTfStrobe, this))
 , joint_sub_(_nh.subscribe("/autoware_gazebo/joint_states", 1, &Self::onJointState, this))
+, joy_sub_(_nh.subscribe<sensor_msgs::Joy>("/dbw/joy", 10, &Self::onJoy, this))
 // , server_(_nh.advertiseService("plan", &Self::onPathRequest, this))
 , as_(_nh, "/path" //, boost::bind(&Self::onRequest, this, _1)
 	, false)// THIS SHOULD ALWAYS BE SET TO FALSE TO AVOID RACE CONDITIONS
 , tf2_listener_(tf2_buffer_)
 , poseQ_(kPoseQSize)
 {
+	_nh.param("deadman_btn", _deadman_btn, 4);
+
+	// control gains
 	_nh.param("Kforward_s", _Kforward_s, 1.);
 	_nh.param("Kback_axial", _Kback_axial, 1.);
 	_nh.param("Kback_intaxial", _Kback_intaxial, 0.01);
@@ -559,8 +572,11 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 	l_speed.data = throttle * (1.0 - _wheel_tread * curvature);
 	r_speed.data = throttle * (1.0 + _wheel_tread * curvature);
 
-    _rw_pub.publish(r_speed);
-    _lw_pub.publish(l_speed);
-    _rd_pub.publish(r_delta);
-    _ld_pub.publish(l_delta);
+	if (!_manualOverride) {
+		_rw_pub.publish(r_speed);
+		_lw_pub.publish(l_speed);
+		_rd_pub.publish(r_delta);
+		_ld_pub.publish(l_delta);
+	}
 }
+
