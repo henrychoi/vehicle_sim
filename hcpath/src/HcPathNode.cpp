@@ -49,6 +49,9 @@ class HcPathNode {
 	tf2_ros::Buffer tf2_buffer_;
 	tf2_ros::TransformListener tf2_listener_;
 
+	geometry_msgs::TransformStamped _xform2kingpin;
+	bool _haveXform2kingpin = false;
+
 	double _eAxialInt = 0
 		, _Kforward_s, _Kback_axial, _Kback_intaxial // throttle gains
 		, _Kback_theta, _Kback_kappa, _Kback_lateral;
@@ -174,7 +177,7 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 				, pose.T[0], pose.T[1], axis[2], pose.yaw);
 		poseQ_.push_back(pose);
 	} catch (tf2::TransformException &ex) {
-		ROS_ERROR("onTfStrobe failed to lookup xform %s", ex.what());
+		ROS_ERROR("onTfStrobe trailer --> base_link failed; reason: %s", ex.what());
 		return; // all history should be valid for stat  to be valid
 	}
 
@@ -212,6 +215,15 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 	} else {
 		_havePoseAvg = false;
 	}
+
+	if (!_haveXform2kingpin) {
+		try {
+			_xform2kingpin = tf2_buffer_.lookupTransform("trailer", "kingpin", ros::Time(0));
+			_haveXform2kingpin = true;
+		} catch (tf2::TransformException &ex) {
+			ROS_DEBUG("onTfStrobe trailer --> kinpin failed; reason: %s", ex.what());
+		}
+	}
 }
 
 void HcPathNode::onGoal() {
@@ -222,9 +234,15 @@ void HcPathNode::onGoal() {
 	auto t0 = ros::Time::now();
 	HCpmpm_Reeds_Shepp_State_Space state_space(_kappa_max, _sigma_max, kPathRes);
 	state_space.set_filter_parameters(motion_noise_, measurement_noise_, controller_);
-	State start = { .x = _rel_x_ave, .y = _rel_y_ave
-			, .theta = _rel_yaw_ave, .kappa = 0, .d = -1
-		}, goal = { .x = 0, .y = 0, .theta = 0, .kappa = 0, .d = -1, };
+	State start = { // path planner pose is always relative to the trailer
+			.x = _rel_x_ave, .y = _rel_y_ave, .theta = _rel_yaw_ave
+			, .kappa = _curvature // the current curvature
+			, .d = -1 // assume we are in R for the demo
+		}, goal = { .x = _xform2kingpin.transform.translation.x
+			, .y = _xform2kingpin.transform.translation.y
+			, .theta = 0, .kappa = 0
+			, .d = -1, // we can only back up into the kingpin
+		};
 	ROS_INFO("path request start [%.2f, %.2f, %.2f] --> [%.2f, %.2f]"
 			, start.x, start.y, start.theta, goal.x, goal.y);
 	vector<State> path;
@@ -460,6 +478,7 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 
 				// > 0 for forward dir
 				auto openThrottle = _Kforward_s * (way.delta_s - ds);
+				// TODO: add the integral axial speed control
 				throttle += openThrottle;
 				if (ds * way.delta_s < -0.01) { // have to switch gear
 					_gear = Gear::P;
@@ -479,7 +498,7 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 				_gear = Gear::N;
 				ROS_WARN("Done with path");
 			}
-			ROS_DEBUG("gear %u error %.2f = %.2f; %.2f, %.2f %.2f = %.2f"
+			ROS_INFO("gear %u error %.2f = %.2f; %.2f, %.2f %.2f = %.2f"
 					, static_cast<uint8_t>(_gear), eAxial, throttle
 					, eLateral, eHeading, eKappa, curvature);
 			break;
@@ -529,7 +548,7 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
         r_delta.data = l_delta.data = 0;
     }
 
-    static constexpr double kMaxSpeed = 5.0;
+    static constexpr double kMaxSpeed = 4.0;
 	throttle = clamp(throttle, -kMaxSpeed, kMaxSpeed);
 
 	if (fabs(throttle) > 0.01) {
@@ -544,6 +563,4 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
     _lw_pub.publish(l_speed);
     _rd_pub.publish(r_delta);
     _ld_pub.publish(l_delta);
-
-
 }
