@@ -39,7 +39,7 @@ using namespace hcpath;
 class HcPathNode {
 	typedef HcPathNode Self;
     ros::NodeHandle _nh, ph_;
-	ros::Publisher _path_pub, _rw_pub, _lw_pub, _rd_pub, _ld_pub;
+	ros::Publisher _planned_pub, _path_pub, _rw_pub, _lw_pub, _rd_pub, _ld_pub;
 	ros::Subscriber tf_strobe_sub_;
     ros::Subscriber joint_sub_;
 
@@ -83,6 +83,9 @@ class HcPathNode {
 	deque<State> _openStateQ;
 	double _s, _prevS = 0, _curvature;
 
+	// deque<geometry_msgs::PoseStamped> _actual_path;
+	nav_msgs::Path _actual_path;
+
 	enum class Gear: uint8_t { N, F, R, P } _gear = Gear::N;
 
 	void onTfStrobe(const std_msgs::Header::ConstPtr&);
@@ -110,7 +113,8 @@ int main(int argc, char **argv) {
 HcPathNode::HcPathNode()
 : _nh("hcpath")
 , ph_("~")
-, _path_pub(ph_.advertise<nav_msgs::Path>("visualization_path", 10))
+, _planned_pub(ph_.advertise<nav_msgs::Path>("planned_path", 1))
+, _path_pub(ph_.advertise<nav_msgs::Path>("actual_path", 1))
 , _rw_pub(_nh.advertise<std_msgs::Float64>("/autoware_gazebo/"
 		"wheel_right_front_velocity_controller/command", 1, true))
 , _lw_pub(_nh.advertise<std_msgs::Float64>("/autoware_gazebo/"
@@ -128,6 +132,8 @@ HcPathNode::HcPathNode()
 , tf2_listener_(tf2_buffer_)
 , poseQ_(kPoseQSize)
 {
+	_actual_path.header.frame_id = "trailer";
+
 	_nh.param("deadman_btn", _deadman_btn, 4);
 
 	// control gains
@@ -279,10 +285,10 @@ void HcPathNode::onGoal() {
 		pose.pose.orientation.z = sin(0.5 * state.theta);
 		pose.pose.orientation.w = cos(0.5 * state.theta);
 		nav_path.poses.push_back(pose);
-		ROS_INFO("waypoint %.2f, %.2f, %.2f, %.2f", state.x, state.y, state.theta, state.kappa);
+		ROS_DEBUG("waypoint %.2f, %.2f, %.2f, %.2f", state.x, state.y, state.theta, state.kappa);
 		_openStateQ.push_back(state);
     }
-	_path_pub.publish(nav_path);
+	_planned_pub.publish(nav_path);
 }
 
 void HcPathNode::onPreempt(){
@@ -421,8 +427,8 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 			;
 		static constexpr double kCos30Deg = 0.866;
 		if (first.d * cos1 < kCos30Deg) {// NOT roughly in the same direction
-			ROS_WARN("Pruning out of the way waypoint (%.2f, %.2f, %.2f)"
-					, first.x, first.y, first.theta);
+			ROS_WARN("Pruning out of the way waypoint (%.2f, %.2f, %.2f, %.0f)"
+					, first.x, first.y, first.theta, first.d);
 			_openStateQ.pop_front();
 			continue;
 		}
@@ -475,7 +481,9 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 		, curvature = _Kback_theta * eHeading
 					+ _Kback_kappa * eKappa
 					+ _Kback_lateral * eLateral;
-	_eAxialInt += eAxial;
+
+    static constexpr double kMaxThrottle = 5, kMaxSteer = 0.6; // 30 deg
+	_eAxialInt = clamp(_eAxialInt + eAxial, -kMaxThrottle, kMaxThrottle);
 
 	std_msgs::Float64 r_speed, l_speed, r_delta, l_delta;
 	static constexpr double kMinDs = 0.01;
@@ -483,35 +491,69 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 	switch (_gear) {
 		case Gear::F:
 		case Gear::R:
+			if (_havePoseAvg) { // visualize actual path
+				if (_actual_path.poses.size()) {
+					const auto& last = _actual_path.poses.back();
+					auto dx = _rel_x_ave - last.pose.position.x
+						, dy = _rel_y_ave - last.pose.position.y;
+					if ((dx*dx + dy*dy) > kPathRes*kPathRes) {
+						geometry_msgs::PoseStamped pose;
+						pose.pose.position.x = _rel_x_ave;
+						pose.pose.position.y = _rel_y_ave;
+						pose.pose.orientation.z = sin(0.5 * _rel_yaw_ave);
+						pose.pose.orientation.w = cos(0.5 * _rel_yaw_ave);
+						_actual_path.poses.push_back(pose);
+						_path_pub.publish(_actual_path);
+					}
+				} else {
+					geometry_msgs::PoseStamped pose;
+					pose.pose.position.x = _rel_x_ave;
+					pose.pose.position.y = _rel_y_ave;
+					pose.pose.orientation.z = sin(0.5 * _rel_yaw_ave);
+					pose.pose.orientation.w = cos(0.5 * _rel_yaw_ave);
+					_actual_path.poses.push_back(pose);
+				}
+			}
 			throttle = _Kback_axial * eAxial;
 			if (_openControlQ.size()) {
-				const auto& way = _openControlQ.front();
-				// kappa = way.kappa;
-				curvature += way.kappa + fabs(ds) * way.sigma; // turn the wheel
+				const auto& ctrl = _openControlQ.front();
+				// kappa = ctrl.kappa;
+				curvature += ctrl.kappa + fabs(ds) * ctrl.sigma; // turn the wheel
 
 				// > 0 for forward dir
-				auto openThrottle = _Kforward_s * (way.delta_s - ds);
+				auto openThrottle = _Kforward_s * (ctrl.delta_s - ds);
 				// TODO: add the integral axial speed control
 				throttle += openThrottle;
-				if (ds * way.delta_s < -0.01) { // have to switch gear
+				if (ds * ctrl.delta_s < -0.01) { // have to switch gear
 					_gear = Gear::P;
-					ROS_WARN("Swiching direction %.2f <> %.2f", way.delta_s, ds);
+					ROS_WARN("Swiching direction %.2f <> %.2f", ctrl.delta_s, ds);
 					break;
 				}
-				if (fabs(way.delta_s - ds) < kMinDs) {
+				if (fabs(ctrl.delta_s - ds) < 0.01) {
 					_openControlQ.pop_front();// move to the next waypoint
 					_prevS = _s; // reset the relative path length
 					if (_openControlQ.size()) {
-						const auto& way = _openControlQ.front();
+						const auto& ctrl = _openControlQ.front();
 						ROS_WARN("Next openloop control %.2f, %.2f, %.2f"
-								, way.delta_s, way.kappa, way.sigma);
+								, ctrl.delta_s, ctrl.kappa, ctrl.sigma);
 					}
 				}
 			} else {
 				_gear = Gear::N;
 				ROS_WARN("Done with path");
+#if 1
+				_actual_path.poses.clear();
+#else
+				nav_msgs::Path path;
+				nav_path.header.frame_id = "trailer";
+				for (const auto& obs: _actual_path) {
+					path.poses.push_back(obs);
+				}
+				_path_pub.publish(path);
+				_actual_path.clear();
+#endif
 			}
-			ROS_INFO("gear %u error %.2f = %.2f; %.2f, %.2f %.2f = %.2f"
+			ROS_INFO("gear %u error %.2f = %.2f; %.2f, %.2f, %.2f = %.2f"
 					, static_cast<uint8_t>(_gear), eAxial, throttle
 					, eLateral, eHeading, eKappa, curvature);
 			break;
@@ -521,7 +563,8 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 				const auto& way = _openControlQ.front();
 				// kappa = way.kappa;
 				curvature += way.kappa;
-				ROS_DEBUG("P: waypoint %.2f %.2f, %.2f", way.delta_s, way.kappa, _curvature);
+				ROS_DEBUG("P: waypoint %.2f %.2f, %.2f", way.delta_s, way.kappa
+						, _curvature);
 				if (fabs(way.kappa - _curvature) > 0.05) {
 					break; // stay in P
 				}
@@ -552,17 +595,19 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 	// Done with bicycle model; distribute the bicycle model to the L/R wheels
     if (fabs(curvature) > 1E-4) {
         auto R = 1.0/curvature
+			// Require R > 2*wheel_tread, which is easily satisfied in path.yaml
             , l = atan(_wheel_base / (R - _wheel_tread))
             , r = atan(_wheel_base / (R + _wheel_tread));
-        static constexpr double kMaxSteer = 0.6; // 30 deg
         l_delta.data = clamp(l, -kMaxSteer, kMaxSteer);
         r_delta.data = clamp(r, -kMaxSteer, kMaxSteer);
     } else {
         r_delta.data = l_delta.data = 0;
     }
 
-    static constexpr double kMaxSpeed = 4.0;
-	throttle = clamp(throttle, -kMaxSpeed, kMaxSpeed);
+	// I considered using the Cachy distribution shape to limit the throttle
+	// the curvature curvature error is large, but this is more intuitive
+	auto maxThrottle = kMaxThrottle * min(1., 1./(kMaxSteer*kMaxSteer + fabs(eKappa)));
+	throttle = clamp(throttle, -maxThrottle, maxThrottle);
 
 	if (fabs(throttle) > 0.01) {
 		ROS_INFO("Gear %u, throttle %.2f, curvature %.2f"
