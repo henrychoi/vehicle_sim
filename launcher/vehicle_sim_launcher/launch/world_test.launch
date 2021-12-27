@@ -108,6 +108,11 @@
   <rosparam command="load" file="$(find vehicle_model)/config/path.yaml" />
   <!-- the path planning server -->
   <node name="hcpath" pkg="hcpath" type="hcpath" required="true" output="screen">
-    <param name="throttle_gain" type="double" value="50"/>
+    <param name="Kforward_s" type="double" value="10"/>
+    <param name="Kback_axial" type="double" value="50"/>
+    <param name="Kback_intaxial" type="double" value="0.1"/>
+    <param name="Kback_theta" type="double" value="1"/>
+    <param name="Kback_kappa" type="double" value="1"/>
+    <param name="Kback_lateral" type="double" value="1"/>
   </node>
 </launch>
