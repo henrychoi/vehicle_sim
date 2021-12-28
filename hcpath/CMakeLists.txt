@@ -48,3 +48,5 @@ install(TARGETS hcpath
 install(DIRECTORY config
 	DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )
+
+add_dependencies(hcpath ${hcpath_EXPORTED_TARGETS})

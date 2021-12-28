@@ -7,9 +7,6 @@ Panels:
         - /Global Options1
         - /RobotModel1/Links1
         - /TF1/Frames1
-        - /Path2
-        - /Path3
-        - /Path3/Status1
       Splitter Ratio: 0.5
     Tree Height: 525
   - Class: rviz/Selection
@@ -313,8 +310,8 @@ Visualization Manager:
       Pose Style: None
       Queue Size: 1
       Radius: 0.029999999329447746
-      Shaft Diameter: 0.01
-      Shaft Length: 0.03
+      Shaft Diameter: 0.009999999776482582
+      Shaft Length: 0.029999999329447746
       Topic: /hcpath/planned_path
       Unreliable: false
       Value: true
@@ -337,8 +334,8 @@ Visualization Manager:
       Pose Style: None
       Queue Size: 1
       Radius: 0.029999999329447746
-      Shaft Diameter: 0.01
-      Shaft Length: 0.03
+      Shaft Diameter: 0.009999999776482582
+      Shaft Length: 0.029999999329447746
       Topic: /hcpath/actual_path
       Unreliable: false
       Value: true

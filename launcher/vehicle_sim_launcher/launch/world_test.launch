@@ -112,8 +112,8 @@
     <param name="Kforward_s" type="double" value="10"/>
     <param name="Kback_axial" type="double" value="50"/>
     <param name="Kback_intaxial" type="double" value="0.1"/>
-    <param name="Kback_theta" type="double" value="5"/>
+    <param name="Kback_theta" type="double" value="0"/>
     <param name="Kback_intkappa" type="double" value="0.01"/>
-    <param name="Kback_lateral" type="double" value="3"/>
+    <param name="Kback_lateral" type="double" value="0"/>
   </node>
 </launch>

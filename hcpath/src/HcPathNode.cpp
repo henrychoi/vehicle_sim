@@ -64,7 +64,8 @@ class HcPathNode {
 
 	static constexpr double kPathRes = 0.05; // [m]
 	double _kappa_max, _sigma_max
-		, _wheel_base, _track_width, _wheel_tread, _wheel_radius, _wheel_width;
+		, _wheel_base, _track_width, _wheel_tread, _max_kappa
+		, _wheel_radius, _wheel_width;
 	geometry_msgs::Point wheel_fl_pos_, wheel_fr_pos_;
 	vector<geometry_msgs::Point> footprint_, wheel_;
 
@@ -150,6 +151,7 @@ HcPathNode::HcPathNode()
 	assert(_nh.getParam("/path/wheel_base", _wheel_base));
 	assert(_nh.getParam("/path/track_width", _track_width));
 	_wheel_tread = 0.5 * _track_width;
+	_max_kappa = 1.0/_track_width;
 	assert(_nh.getParam("/path/wheel_radius", _wheel_radius));
 	assert(_nh.getParam("/path/wheel_width", _wheel_width));
 	assert(_nh.getParam("/path/motion_noise/alpha1", motion_noise_.alpha1));
@@ -438,10 +440,11 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 		auto dist1 = sqrt(dist1sq);
 		if (first.d * dist1 * cos1 < kCos30Deg * kPathRes) {
 			// NOT roughly in the same direction
-			ROS_WARN("ds %.2f Pruning waypoint " //"(%.2f, %.2f)-> "
-					"(%.3f m, %.2f rad) -> %.2f, %.2f, %.2f, %.0f"
-					// , _rel_x_ave, _rel_y_ave
-					, ds, dist1, theta_e, first.x, first.y, first.theta, first.d);
+			ROS_WARN("(%.2f, %.2f) ds %.2f. Pruning "
+					"(%.3f m, %.2f rad) -> %.2f, %.2f"//", %.2f, %.0f"
+					, _rel_x_ave, _rel_y_ave, ds, dist1, theta_e, first.x, first.y
+					// , first.theta, first.d
+					);
 			_openStateQ.pop_front();
 			continue;
 		}
@@ -474,10 +477,9 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 		eKappa = first.kappa - _curvature;
 		eHeading = pify(first.theta - _rel_yaw_ave);
 
-		ROS_DEBUG("way (%.2f, %.2f, %.2f); error %.2f, %.2f; %.2f, %.2f, %.2f, %.2f"
-				, first.x, first.y, first.theta
-				, dist1, phi_error
-				, eAxial, eLateral, eHeading, eKappa);
+		ROS_DEBUG("ds %.2f on way (%.2f, %.2f, %.2f); error %.2f, %.2f; %.2f, %.2f, %.2f, %.2f"
+				, ds, first.x, first.y, first.theta
+				, dist1, phi_error, eAxial, eLateral, eHeading, eKappa);
 
 		_eKappaInt = clamp(_eKappaInt + eKappa, -2., 2.);
 		break;
@@ -485,8 +487,8 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 
 	auto throttle = 0.
 		, curvature = eKappa + _Kback_intkappa * _eKappaInt
-					// + _Kback_theta * eHeading
-					// + _Kback_lateral * eLateral
+					+ _Kback_theta * eHeading
+					+ _Kback_lateral * eLateral
 					;
 
     static constexpr double kMaxThrottle = 5, kMaxSteer = 0.6; // 30 deg
@@ -566,8 +568,8 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 				ROS_WARN("Done with path");
 				_actual_path.poses.clear();
 			}
-			ROS_INFO("gear %u error %.2f = %.2f; %.2f, %.2f, %.2f = %.2f"
-					, static_cast<uint8_t>(_gear), eAxial, throttle
+			ROS_INFO("gear %u, ds %.2f error %.2f = %.2f; %.2f, %.2f, %.2f = %.2f"
+					, static_cast<uint8_t>(_gear), ds, eAxial, throttle
 					, eLateral, eHeading, eKappa, curvature);
 			break;
 
@@ -582,13 +584,13 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 				}
 				_prevS = _s;
 				if (ctrl.delta_s > kMinDs) {
-					_gear = Gear::F;
 					ROS_WARN("P->F %.2f, %.2f, %.2f", ctrl.delta_s, ctrl.kappa, ctrl.sigma);
+					_gear = Gear::F;
 					break;
 				}
 				if (ctrl.delta_s < -kMinDs) {
-					_gear = Gear::R;
 					ROS_WARN("P->R %.2f, %.2f, %.2f", ctrl.delta_s, ctrl.kappa, ctrl.sigma);
+					_gear = Gear::R;
 					break;
 				}
 				_openControlQ.pop_front();// else deal with the next waypoint 
@@ -605,7 +607,7 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 	}
 
 	// Done with bicycle model; distribute the bicycle model to the L/R wheels
-	curvature = clamp(curvature, -1/_track_width, 1/_track_width);
+	curvature = clamp(curvature, -_max_kappa, _max_kappa);
     if (fabs(curvature) > 1E-4) {
 		ROS_INFO("Gear %u, throttle %.2f, curvature %.2f vs. actual %.2f"
 				, static_cast<uint8_t>(_gear), throttle, curvature, _curvature);
@@ -632,7 +634,10 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 	l_speed.data = throttle * (1.0 - _wheel_tread * curvature);
 	r_speed.data = throttle * (1.0 + _wheel_tread * curvature);
 
-	if (!_manualOverride) {
+	if (_manualOverride) {
+		ROS_INFO_THROTTLE(1, "Manual movement, ds %.3g, curvature %.3g"
+				, ds, curvature);
+	} else {
 		_rw_pub.publish(r_speed);
 		_lw_pub.publish(l_speed);
 		_rd_pub.publish(r_delta);
