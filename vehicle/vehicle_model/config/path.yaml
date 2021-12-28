@@ -10,7 +10,7 @@ footprint:
   [0.377, -0.255]]
 
 path:
-  kappa_max: 1.50 # [1/m]
+  kappa_max: 1.48 # [1/m]
   sigma_max: 3 # [1/m^2]; want more responsive steering
 
   # Check "Vehicle Teleoperation Weekly Meeting_20210910.pptx"
