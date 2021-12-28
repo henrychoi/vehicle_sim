@@ -43,7 +43,7 @@ static double pify(double alpha) {
     v -= TWO_PI;
   return v;
 }
-void PerfNode::onGazeboLinkStates(const gazebo_msgs::LinkStates &links) {\
+void PerfNode::onGazeboLinkStates(const gazebo_msgs::LinkStates &links) {
 	static ros::Time sPrevTime = ros::Time::now();
 	const auto now = ros::Time::now();
 	if ((now - sPrevTime).sec <= 0) {
@@ -58,7 +58,7 @@ void PerfNode::onGazeboLinkStates(const gazebo_msgs::LinkStates &links) {\
 	size_t idx, base_idx = -1, trailer_idx = -1;
 	for(idx=0; idx < links.name.size(); ++idx) {
 		// ROS_INFO("link name %s", links.name[idx].c_str());
-		if (links.name[idx] == "autoware_gazebo::base_link") {
+		if (links.name[idx] == "autoware_gazebo::base_footprint") {
 			base_idx = idx;
 		}
 		if (links.name[idx] == "trailer::trailer") {//"trailer::aruco"
@@ -81,7 +81,8 @@ void PerfNode::onGazeboLinkStates(const gazebo_msgs::LinkStates &links) {\
 	// rotation FROM trailer TO the base_link
 	const auto Q = Qlink * Qtrailer.inverse();
 	tf2::Vector3 axis = Q.getAxis();
-	double yaw_gt = Q.getAngle() * (-2*signbit(axis[2])+1);		tf2::Vector3 T2base(tp_link.position.x - tp_trailer.position.x
+	double yaw_gt = Q.getAngle() * (-2*signbit(axis[2])+1);
+	tf2::Vector3 T2base(tp_link.position.x - tp_trailer.position.x
 					, tp_link.position.y - tp_trailer.position.y
 					, tp_link.position.z - tp_trailer.position.z);
 

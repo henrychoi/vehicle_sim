@@ -15,7 +15,7 @@
 #include <geometry_msgs/PoseArray.h>
 #include <tf/transform_datatypes.h>
 #include <visualization_msgs/MarkerArray.h>
-
+#include <gazebo_msgs/LinkStates.h>
 #include <actionlib/server/simple_action_server.h> 
 // #include <hcpath/path_srv.h>
 #include <hcpath/parkAction.h>
@@ -40,17 +40,33 @@ class HcPathNode {
 	typedef HcPathNode Self;
     ros::NodeHandle _nh, ph_;
 	ros::Publisher _planned_pub, _path_pub, _rw_pub, _lw_pub, _rd_pub, _ld_pub;
+
 	ros::Subscriber tf_strobe_sub_;
+	void onTfStrobe(const std_msgs::Header::ConstPtr&);
+
     ros::Subscriber joint_sub_;
+	void onJointState(const sensor_msgs::JointState::ConstPtr &state);
 
 	ros::Subscriber joy_sub_;
+	tf2::Vector3 _trueFootprintPose;
+	void onGazeboLinkStates(const gazebo_msgs::LinkStates &links);
+
     int _deadman_btn;
 	bool _manualOverride = false;
+	void onJoy(const sensor_msgs::Joy::ConstPtr& joy) {
+		_manualOverride = joy->buttons[_deadman_btn];
+	}
+
+	ros::Subscriber gazebo_sub_;
 
 	// ros::ServiceServer server_;
 	actionlib::SimpleActionServer<hcpath::parkAction> as_;
 	parkFeedback feedback_;
 	parkResult result_;
+	// bool onPathRequest(hcpath::path_srv::Request &req, hcpath::path_srv::Response &res);
+	void onPreempt();
+	void onGoal();
+	void onRequest(const parkGoalConstPtr& goal);
 
 	tf2_ros::Buffer tf2_buffer_;
 	tf2_ros::TransformListener tf2_listener_;
@@ -89,16 +105,6 @@ class HcPathNode {
 
 	enum class Gear: uint8_t { N, F, R, P } _gear = Gear::N;
 
-	void onTfStrobe(const std_msgs::Header::ConstPtr&);
-
-	// bool onPathRequest(hcpath::path_srv::Request &req, hcpath::path_srv::Response &res);
-	void onPreempt();
-	void onGoal();
-	void onRequest(const parkGoalConstPtr& goal);
-	void onJointState(const sensor_msgs::JointState::ConstPtr &state);
-	void onJoy(const sensor_msgs::Joy::ConstPtr& joy) {
-		_manualOverride = joy->buttons[_deadman_btn];
-	}
 public:
 	HcPathNode();
 };
@@ -127,6 +133,7 @@ HcPathNode::HcPathNode()
 , tf_strobe_sub_(_nh.subscribe<std_msgs::Header>("/aruco/tf_strobe", 10, &Self::onTfStrobe, this))
 , joint_sub_(_nh.subscribe("/autoware_gazebo/joint_states", 1, &Self::onJointState, this))
 , joy_sub_(_nh.subscribe<sensor_msgs::Joy>("/dbw/joy", 10, &Self::onJoy, this))
+, gazebo_sub_(_nh.subscribe("/truth/link_states", 1, &Self::onGazeboLinkStates, this))
 // , server_(_nh.advertiseService("plan", &Self::onPathRequest, this))
 , as_(_nh, "/path" //, boost::bind(&Self::onRequest, this, _1)
 	, false)// THIS SHOULD ALWAYS BE SET TO FALSE TO AVOID RACE CONDITIONS
@@ -440,9 +447,10 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 		auto dist1 = sqrt(dist1sq);
 		if (first.d * dist1 * cos1 < kCos30Deg * kPathRes) {
 			// NOT roughly in the same direction
-			ROS_WARN("(%.2f, %.2f) ds %.2f. Pruning "
-					"(%.3f m, %.2f rad) -> %.2f, %.2f"//", %.2f, %.0f"
-					, _rel_x_ave, _rel_y_ave, ds, dist1, theta_e, first.x, first.y
+			ROS_WARN("(%.2f, %.2f) ds %.2f "
+					"(%.3f m, %.2f rad) -> Pruning %.2f, %.2f"//", %.2f, %.0f"
+					, _trueFootprintPose[0], _trueFootprintPose[1]//, _rel_x_ave, _rel_y_ave
+					, ds, dist1, theta_e, first.x, first.y
 					// , first.theta, first.d
 					);
 			_openStateQ.pop_front();
@@ -477,7 +485,9 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 		eKappa = first.kappa - _curvature;
 		eHeading = pify(first.theta - _rel_yaw_ave);
 
-		ROS_DEBUG("ds %.2f on way (%.2f, %.2f, %.2f); error %.2f, %.2f; %.2f, %.2f, %.2f, %.2f"
+		ROS_INFO_THROTTLE(0.5
+			, "(%.2f, %.2f) ds %.2f on way (%.2f, %.2f, %.2f); error %.2f, %.2f; %.2f, %.2f, %.2f, %.2f"
+				, _trueFootprintPose[0], _trueFootprintPose[1]//, _rel_x_ave, _rel_y_ave
 				, ds, first.x, first.y, first.theta
 				, dist1, phi_error, eAxial, eLateral, eHeading, eKappa);
 
@@ -491,7 +501,7 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 					+ _Kback_lateral * eLateral
 					;
 
-    static constexpr double kMaxThrottle = 5, kMaxSteer = 0.6; // 30 deg
+    static constexpr double kMaxThrottle = 3, kMaxSteer = 0.6; // 30 deg
 	_eAxialInt = clamp(_eAxialInt + eAxial, -kMaxThrottle, kMaxThrottle);
 
 	std_msgs::Float64 r_speed, l_speed, r_delta, l_delta;
@@ -528,7 +538,8 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 			while (_openControlQ.size()) { // feed-forward control
 				const auto& ctrl = _openControlQ.front();
 				if ((1 - 2*signbit(ctrl.delta_s)) * (ctrl.delta_s - ds) <= 0) {
-					ROS_WARN("ds %.2f done with segment (%.2f, %.2f, %.2f). Moving to next"
+					ROS_WARN("(%.2f, %.2f) ds %.2f done with segment (%.2f, %.2f, %.2f). Moving to next"
+							, _trueFootprintPose[0], _trueFootprintPose[1]//, _rel_x_ave, _rel_y_ave
 							, ds, ctrl.delta_s, ctrl.kappa, ctrl.sigma);
 					_openControlQ.pop_front();// move to the next waypoint
 					_prevS = _s; // reset the relative path length
@@ -568,7 +579,9 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 				ROS_WARN("Done with path");
 				_actual_path.poses.clear();
 			}
-			ROS_INFO("gear %u, ds %.2f error %.2f = %.2f; %.2f, %.2f, %.2f = %.2f"
+			ROS_INFO_THROTTLE(0.5
+					, "(%.2f, %.2f) gear %u, ds %.2f error %.2f = %.2f; %.2f, %.2f, %.2f = %.2f"
+					, _trueFootprintPose[0], _trueFootprintPose[1]//, _rel_x_ave, _rel_y_ave
 					, static_cast<uint8_t>(_gear), ds, eAxial, throttle
 					, eLateral, eHeading, eKappa, curvature);
 			break;
@@ -609,7 +622,7 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 	// Done with bicycle model; distribute the bicycle model to the L/R wheels
 	curvature = clamp(curvature, -_max_kappa, _max_kappa);
     if (fabs(curvature) > 1E-4) {
-		ROS_INFO("Gear %u, throttle %.2f, curvature %.2f vs. actual %.2f"
+		ROS_DEBUG("Gear %u, throttle %.2f, curvature %.2f vs. actual %.2f"
 				, static_cast<uint8_t>(_gear), throttle, curvature, _curvature);
         auto R = 1.0/curvature
 			// Require R > 2*wheel_tread (= track_width)
@@ -635,8 +648,9 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 	r_speed.data = throttle * (1.0 + _wheel_tread * curvature);
 
 	if (_manualOverride) {
-		ROS_INFO_THROTTLE(1, "Manual movement, ds %.3g, curvature %.3g"
-				, ds, curvature);
+		ROS_INFO_THROTTLE(0.5
+				, "Manual movement, dl %.3g, dr %.3g, sl %.3g, sr %.3g vs (%.2f,%.2f)"
+				, dl, dr, sl, sr, _trueFootprintPose[0], _trueFootprintPose[1]);
 	} else {
 		_rw_pub.publish(r_speed);
 		_lw_pub.publish(l_speed);
@@ -645,3 +659,50 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 	}
 }
 
+void HcPathNode::onGazeboLinkStates(const gazebo_msgs::LinkStates &links) {
+	// ROS_DEBUG("onGazeboLinkStates %zd", links.name.size());
+	// if (!buffer_.canTransform("aruco", "quad_link", now)) {
+	// 	return;
+	// }
+	size_t idx, base_idx = -1, trailer_idx = -1;
+	for (idx=0; idx < links.name.size(); ++idx) {
+		// ROS_INFO("link name %s", links.name[idx].c_str());
+		if (links.name[idx] == "autoware_gazebo::base_footprint") {
+			base_idx = idx;
+		}
+		if (links.name[idx] == "trailer::trailer") {//"trailer::aruco"
+			trailer_idx = idx;
+		}
+	}
+	if (base_idx < 0) {
+		ROS_ERROR("base ground truth not found");
+		return;
+	}
+	if (trailer_idx < 0) {
+		ROS_ERROR("trailer ground truth not found");
+		return;
+	}
+	auto& tp_link = links.pose[base_idx];
+	auto& tp_trailer = links.pose[trailer_idx];
+	_trueFootprintPose[0] = tp_link.position.x - tp_trailer.position.x;
+	_trueFootprintPose[1] = tp_link.position.y - tp_trailer.position.y;
+	_trueFootprintPose[2] = tp_link.position.z - tp_trailer.position.z;
+
+#if 0
+	tf2::Quaternion Qlink, Qtrailer;
+	tf2::fromMsg(tp_link.orientation, Qlink);
+	tf2::fromMsg(tp_trailer.orientation, Qtrailer);
+	// rotation FROM trailer TO the base_link
+	const auto Q = Qlink * Qtrailer.inverse();
+	tf2::Vector3 axis = Q.getAxis();
+	auto yaw_gt = Q.getAngle() * (1 - 2*signbit(axis[2]));
+#endif
+	ROS_DEBUG("trailer to base truth; "
+			//"(%.2f, %.2f) - (%.2f, %.2f) = "
+			"(%.2f, %.2f);"//" %.2f"
+			// , tp_link.position.x, tp_link.position.y
+			// , tp_trailer.position.x, tp_trailer.position.y
+			, _trueFootprintPose[0], _trueFootprintPose[1]
+			// , yaw_gt
+			);
+}

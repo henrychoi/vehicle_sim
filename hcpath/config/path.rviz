@@ -4,7 +4,6 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
-        - /Global Options1
         - /RobotModel1/Links1
         - /TF1/Frames1
       Splitter Ratio: 0.5
@@ -399,5 +398,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 1855
-  X: 77
-  Y: 580
+  X: 933
+  Y: 748

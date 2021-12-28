@@ -19,7 +19,7 @@
 
   <!-- spawn the truck at a desired X and Y -->
   <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model"
-    args="-param robot_description -urdf -model autoware_gazebo -x 2 -y -1"/>
+    args="-param robot_description -urdf -model autoware_gazebo -x 1 -y -1"/>
 
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
 
@@ -70,9 +70,9 @@
     args="0.25 0 0  0 0 0 1  trailer kingpin"
     required="true" output="screen"/>
 
-  <!-- Down sample the Gazebo link_states because it is a flood-->
+  <!-- Down sample the Gazebo link_states to 5 Hz because it is a flood-->
   <node name="throttle_gazebo" pkg="topic_tools" type="throttle"
-    args="messages /gazebo/link_states 1.0 /truth/link_states" />
+    args="messages /gazebo/link_states 5 /truth/link_states" />
 
   <!-- Compare pose estimate against the Gazebo generated ground truth -->
   <!-- node name="perf" pkg="perf" type="perf" required="true" output="screen"/-->
@@ -99,7 +99,7 @@
     <param name="deadman_btn" type="int" value="4"/> <!-- LR button-->
     <param name="x_btn" type="int" value="8"/> <!-- the "X" button-->
     <param name="steer_gain" type="double" value="1.5"/>
-    <param name="throttle_gain" type="double" value="10"/>
+    <param name="throttle_gain" type="double" value="1"/>
 
     <!-- <remap from="/aruco/tf_strobe" to="/dbw/tf_strobe"/> -->
   </node>

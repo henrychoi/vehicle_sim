@@ -5,7 +5,8 @@ add_compile_options(-std=c++17)
 
 find_package(catkin REQUIRED COMPONENTS
 	roscpp std_msgs actionlib actionlib_msgs message_generation
-	geometry_msgs nav_msgs visualization_msgs roslib costmap_2d tf
+	geometry_msgs nav_msgs visualization_msgs gazebo_msgs
+	roslib costmap_2d tf
 	)
 #find_package(Boost REQUIRED COMPONENTS system)
 find_package(Eigen3 REQUIRED)
@@ -22,7 +23,7 @@ generate_messages(DEPENDENCIES std_msgs actionlib_msgs)
 ## CATKIN_DEPENDS: catkin_packages dependent projects also need
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
-	CATKIN_DEPENDS roscpp std_msgs message_runtime actionlib_msgs
+	CATKIN_DEPENDS roscpp std_msgs message_runtime actionlib_msgs gazebo_msgs
   	DEPENDS EIGEN3
   )
 catkin_package(DEPENDS Boost)

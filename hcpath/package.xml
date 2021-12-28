@@ -17,6 +17,7 @@
 	<build_depend>geometry_msgs</build_depend>
   	<build_depend>nav_msgs</build_depend>
 	<build_depend>visualization_msgs</build_depend>
+	<build_depend>gazebo_msgs</build_depend>
 	<build_depend>costmap_2d</build_depend>
 	<build_depend>tf</build_depend>
 	<build_depend>eigen</build_depend>
@@ -34,6 +35,7 @@
 	<exec_depend>geometry_msgs</exec_depend>
 	<exec_depend>nav_msgs</exec_depend>
 	<exec_depend>visualization_msgs</exec_depend>
+	<exec_depend>gazebo_msgs</exec_depend>
 	<exec_depend>costmap_2d</exec_depend>
 	<exec_depend>tf</exec_depend>
 	<exec_depend>eigen</exec_depend>
