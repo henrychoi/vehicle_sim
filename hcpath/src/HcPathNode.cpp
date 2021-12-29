@@ -429,7 +429,10 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 	auto throttle = 0., curvature = 0.;
 	double eAxial = 0, eLateral = 0, eHeading = 0, eKappa = 0;
 	//########################################################
-    static constexpr double kMaxThrottle = 5, kMaxSteer = 0.6; // 30 deg
+    static constexpr double kMaxThrottle = 3, kMaxSteer = 0.6; // 30 deg
+	static constexpr double kCos30Deg = 0.866;
+	static constexpr double kEpsilon = 0.01  // 1 cm ball
+		, kEpsilonSq = kEpsilon * kEpsilon;
 
 	if (_openControlQ.size()) {
 		const auto& ctrl = _openControlQ.front();
@@ -453,7 +456,7 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 			auto S = ctrl.delta_s;
 			if (//ctrl.delta_s * first.d < 0 || // control in wrong direction
 				// moved too far past the control endpoint
-				(1 - 2*signbit(ctrl.delta_s)) * (ctrl.delta_s - ds) < -kPathRes) { 
+				(1 - 2*signbit(ctrl.delta_s)) * (ctrl.delta_s - ds) < -kEpsilon) { 
 				ROS_WARN("Pruning control (%.2f, %.2f, %.2f), "
 						"waypoint (%.0f %.2f, %.2f)"
 						, ctrl.delta_s, ctrl.kappa, ctrl.sigma
@@ -488,8 +491,6 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 			, theta_e = pify(phi_error - _rel_yaw_ave)
 			, cos1 = cos(theta_e)
 			;
-		static constexpr double kCos30Deg = 0.866;
-		static constexpr double kEpsilonSq = 0.01*0.01; // 1 cm ball
 		if (dist1sq < kEpsilonSq) {
 			ROS_WARN("^[%.2f, %.2f] reached waypoint 1 (%.2f, %.2f, %.2f); pruning 1"
 					, _rel_x_ave, _rel_y_ave, first.x, first.y, first.theta);
@@ -597,8 +598,6 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 	// the curvature curvature error is large, but this is more intuitive
 	auto maxThrottle = kMaxThrottle * min(1., 1./(kMaxSteer*kMaxSteer + fabs(eKappa)));
 	throttle = clamp(throttle, -maxThrottle, maxThrottle);
-	ROS_INFO_THROTTLE(0.5, "Gear %d, throttle %.2f, curvature %.2f vs. actual %.2f"
-			, static_cast<int8_t>(_gear), throttle, curvature, _curvature);
 
 	// if (fabs(throttle) > 0.01) {
 	// 	ROS_INFO("Gear %d, throttle %.2f, curvature %.2f"
@@ -613,6 +612,8 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 				, "Manual movement, dl %.3g, dr %.3g, sl %.3g, sr %.3g vs (%.2f,%.2f)"
 				, dl, dr, sl, sr, _trueFootprintPose[0], _trueFootprintPose[1]);
 	} else {
+		ROS_INFO_THROTTLE(0.2, "Gear %d, throttle %.2f, curvature %.2f vs. actual %.2f"
+				, static_cast<int8_t>(_gear), throttle, curvature, _curvature);
 		_rw_pub.publish(r_speed);
 		_lw_pub.publish(l_speed);
 		_rd_pub.publish(r_delta);
