@@ -32,7 +32,7 @@ add_executable(hcpath src/HcPathNode.cpp
 	src/configuration.cpp  src/utilities.cpp src/ekf.cpp
 	src/hc_cc_circle.cpp src/paths.cpp
 	src/hc_cc_state_space.cpp
-	src/hcpmpm_reeds_shepp_state_space.cpp
+	src/hcpmpm_reeds_shepp_state_space.cpp src/cute_c2.cpp
 	)
 target_link_libraries(hcpath ${catkin_LIBRARIES}
 # 	${Boost_INCLUDE_DIRS}

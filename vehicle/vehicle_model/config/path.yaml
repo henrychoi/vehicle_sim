@@ -1,5 +1,5 @@
 # Check "truck_mo" file in Fusion360
-footprint:
+footprint: # legacy
   [[0.377, 0.255],
   [0.177, 0.255],
   [0.177, 0.165],
@@ -10,6 +10,22 @@ footprint:
   [0.377, -0.255]]
 
 path:
+  safe_distance: 0.02 # [m] insist on minimum distance
+  # the truck chassis can be considered to consist of 2 rectangles,
+  # (with 0,0 being the base_link):
+  # min (-0.076, -0.165) max (0.177, +0.165)
+  # min (+0.177, -0.255) max (0.377, +0.255)
+  chassis_front:
+    [[0.377, 0.255],
+    [0.177, 0.255],
+    [0.177, -0.255],
+    [0.377, -0.255]]
+  chassis_back:
+    [[0.177, 0.165],
+    [-0.076, 0.165],
+    [-0.076, -0.165],
+    [0.177, -0.165]]
+
   kappa_max: 1.48 # [1/m]
   sigma_max: 3 # [1/m^2]; want more responsive steering
 

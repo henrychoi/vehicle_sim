@@ -20,10 +20,11 @@
 // #include <hcpath/path_srv.h>
 #include <hcpath/parkAction.h>
 #include "hcpmpm_reeds_shepp_state_space.hpp"
-
+#include "cute_c2.h"
 #include <boost/circular_buffer.hpp>
 #include <numeric>
 #include <complex>
+#include <limits>
 
 using namespace std;
 using namespace hcpath;
@@ -36,16 +37,22 @@ using namespace hcpath;
 #define OPERATING_REGION_THETA 2 * M_PI  // [rad]
 #define random(lower, upper) (rand() * (upper - lower) / RAND_MAX + lower)
 
+
+
 class HcPathNode {
 	typedef HcPathNode Self;
     ros::NodeHandle _nh, ph_;
 	ros::Publisher _planned_pub, _path_pub, _rw_pub, _lw_pub, _rd_pub, _ld_pub;
 
 	ros::Subscriber tf_strobe_sub_;
+	ros::Duration _tfWatchdogPeriod;
+	ros::Time _tfTimeout = ros::Time::now(); // when the strobe watchdog expires
 	void onTfStrobe(const std_msgs::Header::ConstPtr&);
 
     ros::Subscriber joint_sub_;
+    static constexpr double kMaxThrottle = 3, kMaxSteer = 0.6; // 30 deg
 	void onJointState(const sensor_msgs::JointState::ConstPtr &state);
+	void control(double& throttle, double& curvature);
 
 	ros::Subscriber joy_sub_;
 	tf2::Vector3 _trueFootprintPose;
@@ -79,11 +86,16 @@ class HcPathNode {
 		, _Kback_theta, _Kback_kappa, _Kback_intkappa, _Kback_lateral;
 
 	static constexpr double kPathRes = 0.05; // [m]
-	double _kappa_max, _sigma_max
+	double _safe_distance, _kappa_max, _sigma_max
 		, _wheel_base, _track_width, _wheel_tread, _max_kappa
 		, _wheel_radius, _wheel_width;
-	geometry_msgs::Point wheel_fl_pos_, wheel_fr_pos_;
-	vector<geometry_msgs::Point> footprint_, wheel_;
+	geometry_msgs::Point _wheel_fl_pos, _wheel_fr_pos;
+	vector<geometry_msgs::Point> _footprint, _wheel;
+	c2GJKCache _gjkCache[4] = { {.count=0}, {.count=0}, {.count=0}, {.count=0} };
+	c2Poly _chassisFrontPoly, _chassisBackPoly;
+	float _dist2Trailer = numeric_limits<float>::max();
+
+	// vector<vector<geometry_msgs::Point>> _legFootprint;
 
 	struct SimplePose_ { complex<tf2Scalar> heading; tf2Scalar yaw; tf2Scalar T[3]; };
 	boost::circular_buffer<SimplePose_> poseQ_;
@@ -103,7 +115,7 @@ class HcPathNode {
 	// deque<geometry_msgs::PoseStamped> _actual_path;
 	nav_msgs::Path _actual_path;
 
-	enum class Gear: int8_t { R=-1, N, F, P } _gear = Gear::N;
+	int8_t _gear = 0; // only -1, 0, 1 are valid
 
 public:
 	HcPathNode();
@@ -141,6 +153,10 @@ HcPathNode::HcPathNode()
 , poseQ_(kPoseQSize)
 {
 	_actual_path.header.frame_id = "trailer";
+	int fps;
+	_nh.param("fps", fps, 15);
+	assert(fps > 5);
+	_tfWatchdogPeriod = ros::Duration(2.5 / fps);
 
 	_nh.param("deadman_btn", _deadman_btn, 4);
 
@@ -154,6 +170,7 @@ HcPathNode::HcPathNode()
 	_nh.param("Kback_intkappa", _Kback_intkappa, 0.001);
 	_nh.param("Kback_lateral", _Kback_lateral, 1.);
 
+	assert(_nh.getParam("/path/safe_distance", _safe_distance));
 	assert(_nh.getParam("/path/kappa_max", _kappa_max));
 	assert(_nh.getParam("/path/sigma_max", _sigma_max));
 	assert(_nh.getParam("/path/wheel_base", _wheel_base));
@@ -178,20 +195,59 @@ HcPathNode::HcPathNode()
     point2.x = -_wheel_radius; point2.y =  0.5 * _wheel_width;
     point3.x = -_wheel_radius; point3.y = -0.5 * _wheel_width;
     point4.x =  _wheel_radius; point4.y = -0.5 * _wheel_width;
-    wheel_.push_back(point1);
-    wheel_.push_back(point2);
-    wheel_.push_back(point3);
-    wheel_.push_back(point4);
-    footprint_ = costmap_2d::makeFootprintFromParams(_nh); // read "footprint" param
+    _wheel.push_back(point1);
+    _wheel.push_back(point2);
+    _wheel.push_back(point3);
+    _wheel.push_back(point4);
+
+    _footprint = costmap_2d::makeFootprintFromParams(_nh); // read "footprint" param
+
+ 	XmlRpc::XmlRpcValue xmlFront, xmlBack;
+	assert(_nh.getParam("/path/chassis_front", xmlFront));
+	assert(_nh.getParam("/path/chassis_back", xmlBack));
+
+	auto chassisFront = costmap_2d::makeFootprintFromXMLRPC(xmlFront
+			, "/path/chassis_front") // full param name is only for debugging
+		, chassisBack = costmap_2d::makeFootprintFromXMLRPC(xmlBack
+			, "/path/chassis_back");
+	assert(chassisFront.size());
+	assert(chassisBack.size());
+	_chassisFrontPoly.count = chassisFront.size();
+	for (auto i=0; i < _chassisFrontPoly.count; ++i) { // geometry_msgs::Point
+		_chassisFrontPoly.verts[i].x = chassisFront[i].x;
+		_chassisFrontPoly.verts[i].y = chassisFront[i].y;
+	}
+	c2MakePoly(&_chassisFrontPoly);
+
+	_chassisBackPoly.count = chassisBack.size();
+	for (auto i=0; i < _chassisBackPoly.count; ++i) {
+		_chassisBackPoly.verts[i].x = chassisBack[i].x;
+		_chassisBackPoly.verts[i].y = chassisBack[i].y;
+	}
+	c2MakePoly(&_chassisBackPoly);
 
 	as_.registerPreemptCallback(boost::bind(&Self::onPreempt, this));
 	as_.registerGoalCallback(boost::bind(&Self::onGoal, this));
     as_.start();//start() should be called after construction of the server
 }
 
+// should fire at FPS Hz
 void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
+	const auto t0 = ros::Time::now();
+	if (!_haveXform2kingpin) {
+		try {
+			_xform2kingpin = tf2_buffer_.lookupTransform("trailer", "kingpin", ros::Time(0));
+			_haveXform2kingpin = true;
+		} catch (tf2::TransformException &ex) {
+			ROS_DEBUG("onTfStrobe trailer --> kinpin failed; reason: %s", ex.what());
+		}
+	}
+
 	try {
-		const auto xform = tf2_buffer_.lookupTransform("trailer", "base_link", ros::Time(0));
+		const auto xform = tf2_buffer_.lookupTransform("trailer", "base_link"
+											// , t0 - _tfTimeout
+											, ros::Time(0) // get the latest xform
+											);
 		tf2::Quaternion Q;
 		tf2::fromMsg(xform.transform.rotation, Q);
 		tf2::Vector3 axis = Q.getAxis();
@@ -200,13 +256,14 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 			.heading = polar(1., angle), .yaw = angle 
 			, .T = { xform.transform.translation.x
 					, xform.transform.translation.y
-					, xform.transform.translation.z}
+					, xform.transform.translation.z }
 		};
 		ROS_DEBUG("trailer -> base_link = [%.2f, %.2f; %.2f, %.2f]"
 				, pose.T[0], pose.T[1], axis[2], pose.yaw);
 		poseQ_.push_back(pose);
 	} catch (tf2::TransformException &ex) {
 		ROS_ERROR("onTfStrobe trailer --> base_link failed; reason: %s", ex.what());
+		_havePoseAvg = false;
 		return; // all history should be valid for stat  to be valid
 	}
 
@@ -241,17 +298,51 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 		_rel_yaw_ave = yaw_ave; _rel_x_ave = x_ave; _rel_y_ave = y_ave; 
 		_rel_yaw_var = yaw_var; _rel_x_var = x_var; _rel_y_var = y_var;
 		_havePoseAvg = true;
+		_tfTimeout = t0 + _tfWatchdogPeriod;
+
+		if (_gear) { // check for collision while in gear
+			static constexpr float kLegBase = 0.54f, kLegWidth = 0.44f, kLegRadius = 0.02f;
+			static constexpr c2AABB kLegAABB[4] = { // legs are modeled as tall boxes
+				{ { 0.5f*kLegBase - kLegRadius,  0.5f*kLegWidth - kLegRadius} // leg1
+				, { 0.5f*kLegBase + kLegRadius,  0.5f*kLegWidth + kLegRadius} },
+				{ { 0.5f*kLegBase - kLegRadius, -0.5f*kLegWidth - kLegRadius} // leg2
+				, { 0.5f*kLegBase + kLegRadius, -0.5f*kLegWidth + kLegRadius} },
+				{ {-0.5f*kLegBase - kLegRadius,  0.5f*kLegWidth - kLegRadius} // leg3
+				, {-0.5f*kLegBase + kLegRadius,  0.5f*kLegWidth + kLegRadius} },
+				{ {-0.5f*kLegBase - kLegRadius, -0.5f*kLegWidth - kLegRadius} // leg4
+				, {-0.5f*kLegBase + kLegRadius, -0.5f*kLegWidth + kLegRadius} }
+			};
+
+			float minDist = numeric_limits<float>::max();
+			// check for collision, at (x +- 3tau_x, y +- 3tau_y, theta +- 3tau_theta):
+			// 8 transforms of the nominal footprint
+			auto yaw_sigma = sqrt(_rel_yaw_var);
+			// TODO: consider varying x and y
+			c2x xform;
+			xform.p = { .x = static_cast<float>(_rel_x_ave)
+					, .y = static_cast<float>(_rel_y_ave) };
+			for (auto i=-3; i <=3; i += 3) {
+				auto yaw = _rel_yaw_ave + i*yaw_sigma;
+				xform.r = { .c = cosf(yaw), .s = sinf(yaw) };
+				for (unsigned l=0; l < sizeof(kLegAABB)/sizeof(kLegAABB[0]); ++l) {
+					auto dist = c2GJK(&kLegAABB[l], C2_TYPE_AABB, NULL
+									, &_chassisBackPoly, C2_TYPE_POLY, &xform
+									, NULL, NULL, true, NULL, &_gjkCache[l]);
+					if (dist <= 0) { // collision!
+						ROS_ERROR("rear collision against leg %u at yaw %.2f", l, yaw);
+					} else {
+						ROS_DEBUG("distance %.2f to leg %u at yaw %.2f", dist, l, yaw);
+					}
+					minDist = min(minDist, dist);
+				}
+			}
+			_dist2Trailer = minDist;
+			auto elapsed = ros::Time::now() - t0;
+			ROS_INFO_THROTTLE(1, "collision checking took %u ns", elapsed.nsec);
+		}
 	} else {
 		_havePoseAvg = false;
-	}
-
-	if (!_haveXform2kingpin) {
-		try {
-			_xform2kingpin = tf2_buffer_.lookupTransform("trailer", "kingpin", ros::Time(0));
-			_haveXform2kingpin = true;
-		} catch (tf2::TransformException &ex) {
-			ROS_DEBUG("onTfStrobe trailer --> kinpin failed; reason: %s", ex.what());
-		}
+		return;
 	}
 }
 
@@ -276,14 +367,16 @@ void HcPathNode::onGoal() {
 			, start.x, start.y, start.theta, goal.x, goal.y);
 	vector<State> path;
 	vector<Control> segments = state_space.get_path(start, goal, path);
+
 	auto elapsed = ros::Time::now() - t0;
 	// ROS_WARN("Generated control length %zd", seg.size());
+
 	for (auto seg: segments) {
 		// auto delta = atan(_wheel_base * seg.kappa);
 		ROS_INFO("control segment %.2f, %.2f, %.2f", seg.delta_s, seg.kappa, seg.sigma);
 		_openControlQ.push_back(seg);
 	}
-	_gear = Gear::N;
+	_gear = 0;
 	_eKappaInt = _eAxialInt = 0;
 
 	nav_msgs::Path nav_path;
@@ -395,9 +488,9 @@ bool HcPathNode::onPathRequest(hcpath::path_srv::Request &req, hcpath::path_srv:
 }
 #endif
 
-
 void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 {
+	const auto now = ros::Time::now();
     double dr = 0, dl = 0, wl = 0, wr = 0, sl = 0, sr = 0;
     for (auto i = 0; i < state->name.size(); ++i) {
         if (state->name.at(i) == "steering_right_front_joint")
@@ -425,11 +518,64 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
     
     _curvature = 0.5 * (kl + kr); // average curvature
 	_s = _wheel_radius * 0.5 * (sl + sr);
+
+	std_msgs::Float64 r_speed, l_speed, r_delta, l_delta;
+	double throttle = 0, curvature = 0;
+
+	if (!_havePoseAvg || now > _tfTimeout) {
+		ROS_ERROR_THROTTLE(1, "No pose estimate watchdog; no vehicle control");	
+		_gear = 0;
+		goto output_;
+	}
+	if (_dist2Trailer < _safe_distance) {
+		ROS_ERROR_THROTTLE(1, "Unsafe distance %.3f; stopped", _dist2Trailer);	
+		_gear = 0;
+		goto output_;
+	}
+
+	control(throttle, curvature);
+output_:
+	// Done with bicycle model; distribute the bicycle model to the L/R wheels
+	curvature = clamp(curvature, -_max_kappa, _max_kappa);
+    if (fabs(curvature) > 1E-4) {
+        auto R = 1.0/curvature
+			// Require R > 2*wheel_tread (= track_width)
+            , l = atan(_wheel_base / (R - _wheel_tread))
+            , r = atan(_wheel_base / (R + _wheel_tread));
+        l_delta.data = clamp(l, -kMaxSteer, kMaxSteer);
+        r_delta.data = clamp(r, -kMaxSteer, kMaxSteer);
+    } else {
+        r_delta.data = l_delta.data = 0;
+    }
+
+	// if (fabs(throttle) > 0.01) {
+	// 	ROS_INFO("Gear %d, throttle %.2f, curvature %.2f"
+	// 			, _gear, throttle, curvature);
+	// }
+	// Implement SW differential
+	l_speed.data = throttle * (1.0 - _wheel_tread * curvature);
+	r_speed.data = throttle * (1.0 + _wheel_tread * curvature);
+
+	if (_manualOverride) {
+		ROS_INFO_THROTTLE(0.5, // "dl %.3g, dr %.3g, sl %.3g, sr %.3g "
+				"^[%.2f, %.2f, %.2f] vs truth (%.2f, %.2f)"
+				// , dl, dr, sl, sr
+				, _rel_x_ave, _rel_y_ave, _rel_yaw_ave
+				, _trueFootprintPose[0], _trueFootprintPose[1]);
+	} else {
+		ROS_INFO_THROTTLE(0.2, "Gear %d, throttle %.2f, curvature %.2f vs. actual %.2f"
+				, _gear, throttle, curvature, _curvature);
+		_rw_pub.publish(r_speed);
+		_lw_pub.publish(l_speed);
+		_rd_pub.publish(r_delta);
+		_ld_pub.publish(l_delta);
+	}
+}
+
+// @precondition Have vehicle pose estimate
+void HcPathNode::control(double& throttle, double& curvature) {
 	auto ds = _s - _prevS; // displacement along the path
-	auto throttle = 0., curvature = 0.;
 	double eAxial = 0, eLateral = 0, eHeading = 0, eKappa = 0;
-	//########################################################
-    static constexpr double kMaxThrottle = 3, kMaxSteer = 0.6; // 30 deg
 	static constexpr double kCos30Deg = 0.866;
 	static constexpr double kEpsilon = 0.01  // 1 cm ball
 		, kEpsilonSq = kEpsilon * kEpsilon;
@@ -438,18 +584,18 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 		const auto& ctrl = _openControlQ.front();
 		curvature = ctrl.kappa;
 
-		if (_gear == Gear::N) { 
+		if (_gear == 0) { 
 			auto e = ctrl.kappa - _curvature;
 			if (fabs(e) < 0.05) {
-				_gear = static_cast<Gear>(1 - 2*signbit(ctrl.delta_s));
+				_gear = 1 - 2*signbit(ctrl.delta_s);
 				ROS_WARN("Kappa error %.2f switching gear to %d"
-						, e, static_cast<int8_t>(_gear));
+						, e, _gear);
 				_prevS = _s; ds = _s - _prevS;
 				_eAxialInt = 0; // reset integrated axial error
 			}
 		}
 	}
-	while (static_cast<int8_t>(_gear) &&  _havePoseAvg && _openStateQ.size()) {
+	while (_gear && _openStateQ.size()) {
 		const auto& first = _openStateQ.front();
 		if (_openControlQ.size()) { // feed-forward control
 			const auto& ctrl = _openControlQ.front();
@@ -468,13 +614,13 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 				if (_openControlQ.size()) { // check for direction change
 					const auto& ctrl = _openControlQ.front();
 					if (S * ctrl.delta_s < 0) { // direction switch
-						ROS_WARN("Switching path control to (%.2f, %.2f)"
+						ROS_WARN("Switching path control to (%.2f, %.2f); N gear"
 								, ctrl.delta_s, ctrl.kappa);
-						_gear = Gear::N;
+						_gear = 0;
 					}
 				} else {
-					ROS_WARN("Done with path");
-					_gear = Gear::N;
+					ROS_WARN("Done with path; N gear");
+					_gear = 0;
 					_actual_path.poses.clear();
 				}
 				continue;
@@ -539,15 +685,10 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 		eHeading = pify(first.theta - _rel_yaw_ave);
 		throttle += _Kback_axial * eAxial + _Kback_intaxial * _eKappaInt;
 		_eAxialInt = clamp(_eAxialInt + eAxial, -kMaxThrottle, +kMaxThrottle);
-		// ROS_DEBUG_THROTTLE(0.5
-		// 	, "(%.2f, %.2f) ds %.2f on way (%.2f, %.2f, %.2f); e %.2f, %.2f; %.2f, %.2f, %.2f, %.2f"
-		// 		, _trueFootprintPose[0], _trueFootprintPose[1]//, _rel_x_ave, _rel_y_ave
-		// 		, ds, first.x, first.y, first.theta
-		// 		, dist1, phi_error, eAxial, eLateral, eHeading, eKappa);
-		ROS_INFO_THROTTLE(0.1
+		ROS_INFO_THROTTLE(0.25
 				, "(%.2f, %.2f) gear %d, ds %.2f error %.2f = %.2f; %.2f, %.2f, %.2f = %.2f"
 				, _trueFootprintPose[0], _trueFootprintPose[1]//, _rel_x_ave, _rel_y_ave
-				, static_cast<int8_t>(_gear), ds, eAxial, throttle
+				, _gear, ds, eAxial, throttle
 				, eLateral, eHeading, eKappa, curvature);
 		// visualize actual path
 		if (_actual_path.poses.size()) {
@@ -580,45 +721,10 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 			+ _Kback_lateral * eLateral;
 	_eKappaInt = clamp(_eKappaInt + eKappa, -2., 2.);
 
-	// Done with bicycle model; distribute the bicycle model to the L/R wheels
-	std_msgs::Float64 r_speed, l_speed, r_delta, l_delta;
-	curvature = clamp(curvature, -_max_kappa, _max_kappa);
-    if (fabs(curvature) > 1E-4) {
-        auto R = 1.0/curvature
-			// Require R > 2*wheel_tread (= track_width)
-            , l = atan(_wheel_base / (R - _wheel_tread))
-            , r = atan(_wheel_base / (R + _wheel_tread));
-        l_delta.data = clamp(l, -kMaxSteer, kMaxSteer);
-        r_delta.data = clamp(r, -kMaxSteer, kMaxSteer);
-    } else {
-        r_delta.data = l_delta.data = 0;
-    }
-
-	// I considered using the Cachy distribution shape to limit the throttle
+	// I considered using the Cauchy distribution shape to limit the throttle
 	// the curvature curvature error is large, but this is more intuitive
 	auto maxThrottle = kMaxThrottle * min(1., 1./(kMaxSteer*kMaxSteer + fabs(eKappa)));
 	throttle = clamp(throttle, -maxThrottle, maxThrottle);
-
-	// if (fabs(throttle) > 0.01) {
-	// 	ROS_INFO("Gear %d, throttle %.2f, curvature %.2f"
-	// 			, static_cast<int8_t>(_gear), throttle, curvature);
-	// }
-	// Implement SW differential
-	l_speed.data = throttle * (1.0 - _wheel_tread * curvature);
-	r_speed.data = throttle * (1.0 + _wheel_tread * curvature);
-
-	if (_manualOverride) {
-		ROS_INFO_THROTTLE(0.5
-				, "Manual movement, dl %.3g, dr %.3g, sl %.3g, sr %.3g vs (%.2f,%.2f)"
-				, dl, dr, sl, sr, _trueFootprintPose[0], _trueFootprintPose[1]);
-	} else {
-		ROS_INFO_THROTTLE(0.2, "Gear %d, throttle %.2f, curvature %.2f vs. actual %.2f"
-				, static_cast<int8_t>(_gear), throttle, curvature, _curvature);
-		_rw_pub.publish(r_speed);
-		_lw_pub.publish(l_speed);
-		_rd_pub.publish(r_delta);
-		_ld_pub.publish(l_delta);
-	}
 }
 
 void HcPathNode::onGazeboLinkStates(const gazebo_msgs::LinkStates &links) {
