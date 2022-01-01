@@ -42,13 +42,13 @@ public:
   /** \brief Virtual function that returns controls of the shortest path from state1 to state2 */
   virtual vector<Control> get_controls(const State& state1, const State& state2) const = 0;
 
-  /** \brief Returns path from state1 to state2 */
-  vector<Control> get_path(const State& state1, const State& state2
-    , vector<State>& path) const;
+  /** @return path length */
+  float get_path(const State& state1, const State& state2
+    , vector<Control>& control, vector<State>& path) const;
 
-  /** \brief Returns path including covariances from state1 to state2 */
-  vector<Control> get_path_with_covariance(const State_With_Covariance& state1, const State& state2
-    , vector<State_With_Covariance>& path_with_covariance) const;
+  /** @return path length */
+  float get_path_with_covariance(const State_With_Covariance& state1, const State& state2
+    , vector<Control>& control, vector<State_With_Covariance>& path_with_covariance) const;
 
   /** \brief Returns integrated states given a start state and controls */
   vector<State>& integrate(const State& state, const vector<Control>& controls

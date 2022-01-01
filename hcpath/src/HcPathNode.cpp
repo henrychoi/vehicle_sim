@@ -20,6 +20,7 @@
 // #include <hcpath/path_srv.h>
 #include <hcpath/parkAction.h>
 #include "hcpmpm_reeds_shepp_state_space.hpp"
+#include "cc_dubins_state_space.hpp"
 #include "cute_c2.h"
 #include <boost/circular_buffer.hpp>
 #include <numeric>
@@ -41,6 +42,23 @@ using namespace hcpath;
 
 class HcPathNode {
 	typedef HcPathNode Self;
+	bool heuristic_plan();
+	bool Dubins2(State& start, State& goal
+		, vector<Control>& segments, vector<State>& path) {
+		CC_Dubins_State_Space ss(_kappa_max, _sigma_max, kPathRes, start.d > 0);
+		ss.set_filter_parameters(motion_noise_, measurement_noise_, controller_);
+		auto len = ss.get_path(start, goal, segments, path);
+		// A valid path should be less than the Manhattan distance
+		return len < fabs(goal.x - start.x) + fabs(goal.y - start.y);
+	}
+
+	void RSpmpm2(State& start, State& goal
+		, vector<Control>& segments, vector<State>& path) {
+		HCpmpm_Reeds_Shepp_State_Space ss(_kappa_max, _sigma_max, kPathRes);
+		ss.set_filter_parameters(motion_noise_, measurement_noise_, controller_);
+		(void)ss.get_path(start, goal, segments, path);
+	}
+
     ros::NodeHandle _nh, ph_;
 	ros::Publisher _planned_pub, _path_pub, _rw_pub, _lw_pub, _rd_pub, _ld_pub;
 
@@ -85,7 +103,9 @@ class HcPathNode {
 		, _Kforward_s, _Kback_axial, _Kback_intaxial // throttle gains
 		, _Kback_theta, _Kback_kappa, _Kback_intkappa, _Kback_lateral;
 
-	static constexpr double kPathRes = 0.05; // [m]
+	static constexpr double kPathRes = 0.05 // [m]
+		, kPossibleApproachConeAngle = M_PI/4
+		; 
 	double _safe_distance, _kappa_max, _sigma_max
 		, _wheel_base, _track_width, _wheel_tread, _max_kappa
 		, _wheel_radius, _wheel_width;
@@ -95,7 +115,6 @@ class HcPathNode {
 	c2Poly _chassisFrontPoly, _chassisBackPoly;
 	float _dist2Trailer = numeric_limits<float>::max();
 
-	// vector<vector<geometry_msgs::Point>> _legFootprint;
 
 	struct SimplePose_ { complex<tf2Scalar> heading; tf2Scalar yaw; tf2Scalar T[3]; };
 	boost::circular_buffer<SimplePose_> poseQ_;
@@ -300,46 +319,57 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 		_havePoseAvg = true;
 		_tfTimeout = t0 + _tfWatchdogPeriod;
 
-		if (_gear) { // check for collision while in gear
-			static constexpr float kLegBase = 0.54f, kLegWidth = 0.44f, kLegRadius = 0.02f;
-			static constexpr c2AABB kLegAABB[4] = { // legs are modeled as tall boxes
-				{ { 0.5f*kLegBase - kLegRadius,  0.5f*kLegWidth - kLegRadius} // leg1
-				, { 0.5f*kLegBase + kLegRadius,  0.5f*kLegWidth + kLegRadius} },
-				{ { 0.5f*kLegBase - kLegRadius, -0.5f*kLegWidth - kLegRadius} // leg2
-				, { 0.5f*kLegBase + kLegRadius, -0.5f*kLegWidth + kLegRadius} },
-				{ {-0.5f*kLegBase - kLegRadius,  0.5f*kLegWidth - kLegRadius} // leg3
-				, {-0.5f*kLegBase + kLegRadius,  0.5f*kLegWidth + kLegRadius} },
-				{ {-0.5f*kLegBase - kLegRadius, -0.5f*kLegWidth - kLegRadius} // leg4
-				, {-0.5f*kLegBase + kLegRadius, -0.5f*kLegWidth + kLegRadius} }
-			};
-
-			float minDist = numeric_limits<float>::max();
-			// check for collision, at (x +- 3tau_x, y +- 3tau_y, theta +- 3tau_theta):
-			// 8 transforms of the nominal footprint
-			auto yaw_sigma = sqrt(_rel_yaw_var);
-			// TODO: consider varying x and y
-			c2x xform;
-			xform.p = { .x = static_cast<float>(_rel_x_ave)
-					, .y = static_cast<float>(_rel_y_ave) };
-			for (auto i=-3; i <=3; i += 3) {
-				auto yaw = _rel_yaw_ave + i*yaw_sigma;
-				xform.r = { .c = cosf(yaw), .s = sinf(yaw) };
-				for (unsigned l=0; l < sizeof(kLegAABB)/sizeof(kLegAABB[0]); ++l) {
-					auto dist = c2GJK(&kLegAABB[l], C2_TYPE_AABB, NULL
-									, &_chassisBackPoly, C2_TYPE_POLY, &xform
-									, NULL, NULL, true, NULL, &_gjkCache[l]);
-					if (dist <= 0) { // collision!
-						ROS_ERROR("rear collision against leg %u at yaw %.2f", l, yaw);
-					} else {
-						ROS_DEBUG("distance %.2f to leg %u at yaw %.2f", dist, l, yaw);
-					}
-					minDist = min(minDist, dist);
+		switch(_gear) {
+			case -126: // Recover from e-stop generate a new path to recover from e-stop
+				if (heuristic_plan()) {
+					_gear = 0; // put into N to get going
+				} else {
+					_gear = -128; // non-recoverable failure
 				}
-			}
-			_dist2Trailer = minDist;
-			auto elapsed = ros::Time::now() - t0;
-			ROS_INFO_THROTTLE(1, "collision checking took %u ns", elapsed.nsec);
-		}
+				break;
+			case -1: // fall through
+			case 1: { // check for collision while driving (in gear)
+				static constexpr float kLegBase = 0.54f, kLegWidth = 0.44f, kLegRadius = 0.02f;
+				static constexpr c2AABB kLegAABB[4] = { // legs are modeled as tall boxes
+					{ { 0.5f*kLegBase - kLegRadius,  0.5f*kLegWidth - kLegRadius} // leg1
+					, { 0.5f*kLegBase + kLegRadius,  0.5f*kLegWidth + kLegRadius} },
+					{ { 0.5f*kLegBase - kLegRadius, -0.5f*kLegWidth - kLegRadius} // leg2
+					, { 0.5f*kLegBase + kLegRadius, -0.5f*kLegWidth + kLegRadius} },
+					{ {-0.5f*kLegBase - kLegRadius,  0.5f*kLegWidth - kLegRadius} // leg3
+					, {-0.5f*kLegBase + kLegRadius,  0.5f*kLegWidth + kLegRadius} },
+					{ {-0.5f*kLegBase - kLegRadius, -0.5f*kLegWidth - kLegRadius} // leg4
+					, {-0.5f*kLegBase + kLegRadius, -0.5f*kLegWidth + kLegRadius} }
+				};
+
+				float minDist = numeric_limits<float>::max();
+				// check for collision, at (x +- 3tau_x, y +- 3tau_y, theta +- 3tau_theta):
+				// 8 transforms of the nominal footprint
+				auto yaw_sigma = sqrt(_rel_yaw_var);
+				// TODO: consider varying x and y
+				c2x xform;
+				xform.p = { .x = static_cast<float>(_rel_x_ave)
+						, .y = static_cast<float>(_rel_y_ave) };
+				for (auto i=-3; i <=3; i += 3) {
+					auto yaw = _rel_yaw_ave + i*yaw_sigma;
+					xform.r = { .c = cosf(yaw), .s = sinf(yaw) };
+					for (unsigned l=0; l < sizeof(kLegAABB)/sizeof(kLegAABB[0]); ++l) {
+						auto dist = c2GJK(&kLegAABB[l], C2_TYPE_AABB, NULL
+										, &_chassisBackPoly, C2_TYPE_POLY, &xform
+										, NULL, NULL, true, NULL, &_gjkCache[l]);
+						if (dist <= 0) { // collision!
+							ROS_ERROR("rear collision against leg %u at yaw %.2f", l, yaw);
+						} else {
+							ROS_DEBUG("distance %.2f to leg %u at yaw %.2f", dist, l, yaw);
+						}
+						minDist = min(minDist, dist);
+					}
+				}
+				_dist2Trailer = minDist;
+				auto elapsed = ros::Time::now() - t0;
+				ROS_INFO_THROTTLE(1, "collision checking took %u ns", elapsed.nsec);
+			}	break;
+			default: break;
+		} // end switch(_gear)
 	} else {
 		_havePoseAvg = false;
 		return;
@@ -349,34 +379,63 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 void HcPathNode::onGoal() {
 	int32_t target = as_.acceptNewGoal()->target;// accept the new goal
 	// Get the path from the current base_link pose to the dock target
-	// (0: fifth_whl or 1: side hitch)
+	// (0: approach fifth_whl from the front or 1: side hitch from the back)
 	ROS_INFO("onGoal target %d", target);
+	if (heuristic_plan()) {
+		_gear = 0; // put into N to get going
+	} else {
+		_gear = -128; // non-recoverable failure
+	}
+}
+
+bool HcPathNode::heuristic_plan() {
+	bool ok = false;
 	auto t0 = ros::Time::now();
-	HCpmpm_Reeds_Shepp_State_Space state_space(_kappa_max, _sigma_max, kPathRes);
-	state_space.set_filter_parameters(motion_noise_, measurement_noise_, controller_);
-	State start = { // path planner pose is always relative to the trailer
-			.x = _rel_x_ave, .y = _rel_y_ave, .theta = _rel_yaw_ave
-			, .kappa = _curvature // the current curvature
-			, .d = -1 // assume we are in R for the demo
-		}, goal = { .x = _xform2kingpin.transform.translation.x
-			, .y = _xform2kingpin.transform.translation.y
-			, .theta = 0, .kappa = 0
-			, .d = -1, // we can only back up into the kingpin
-		};
-	ROS_INFO("path request start [%.2f, %.2f, %.2f] --> [%.2f, %.2f]"
-			, start.x, start.y, start.theta, goal.x, goal.y);
+
 	vector<State> path;
-	vector<Control> segments = state_space.get_path(start, goal, path);
+	vector<Control> segments;
+
+	State start = { // path planner pose is always relative to the trailer
+		.x = _rel_x_ave, .y = _rel_y_ave, .theta = _rel_yaw_ave
+		, .kappa = _curvature // the current curvature
+		, .d = -1 // assume we are in R for the demo
+	}, goal = {
+		.x = _xform2kingpin.transform.translation.x
+		, .y = _xform2kingpin.transform.translation.y
+		, .theta = 0, .kappa = 0
+		, .d = -1, // we can only back up into the kingpin
+	};
+
+	// test if current position is within the kPossibleApproachConeAngle
+	// for now, consider only the kingpin target
+	auto angleFromTarget = atan2(start.y - goal.y, start.x - goal.x);
+
+	if (angleFromTarget*angleFromTarget
+			< kPossibleApproachConeAngle*kPossibleApproachConeAngle) {
+		ROS_INFO("Dubins path request [%.2f, %.2f, %.2f] %.2f --> [%.2f, %.2f]"
+				, start.x, start.y, start.theta, angleFromTarget, goal.x, goal.y);
+		if (!Dubins2(start, goal, segments, path)) {
+			ROS_ERROR("Invalid path generated");
+		}
+	} else { // recovering from collision or outside possibility cone
+		// can't drive straight to the target drive to the recovery position instead
+		// heuristic based recovery planner
+		// move away from the trailer
+		goal.x = _xform2kingpin.transform.translation.x + 3 * _wheel_base;
+		start.d = goal.d = 1; // go forward when recovering
+		ROS_WARN("RS path request [%.2f, %.2f, %.2f] %.2f --> [%.2f, %.2f]"
+				, start.x, start.y, start.theta, angleFromTarget, goal.x, goal.y);
+		RSpmpm2(start, goal, segments, path);
+	}
 
 	auto elapsed = ros::Time::now() - t0;
-	// ROS_WARN("Generated control length %zd", seg.size());
+	ROS_WARN("Path planning took %u nsec", elapsed.nsec);
 
 	for (auto seg: segments) {
 		// auto delta = atan(_wheel_base * seg.kappa);
 		ROS_INFO("control segment %.2f, %.2f, %.2f", seg.delta_s, seg.kappa, seg.sigma);
 		_openControlQ.push_back(seg);
 	}
-	_gear = 0;
 	_eKappaInt = _eAxialInt = 0;
 
 	nav_msgs::Path nav_path;
@@ -393,6 +452,8 @@ void HcPathNode::onGoal() {
 		_openStateQ.push_back(state);
     }
 	_planned_pub.publish(nav_path);
+
+	return ok;
 }
 
 void HcPathNode::onPreempt(){
@@ -403,61 +464,8 @@ void HcPathNode::onPreempt(){
 
 void HcPathNode::onRequest(const parkGoalConstPtr &req) {
 	int32_t target = req->target;
-#if 1
 	ROS_INFO("onRequest target %d", target);
 	as_.setSucceeded(result_);
-#else
-	if (!as_.isActive()) {
-		ROS_WARN("Action server not active");
-		return;
-	}
-	if (as_.isPreemptRequested()) {
-		ROS_WARN("Action server preempted");
-		return;
-	}
-	// as_.acceptNewGoal();
-
-	HCpmpm_Reeds_Shepp_State_Space state_space(_kappa_max, _sigma_max, kPathRes);
-	state_space.set_filter_parameters(motion_noise_, measurement_noise_, controller_);
-	State start = { .x = _rel_x_ave, .y = _rel_y_ave
-			, .theta = _rel_yaw_ave, .kappa = 0,
-		}, goal = { .x = 0, .y = 0, .theta = 0, .kappa = 0, .d = 1, };
-	ROS_INFO("path request start [%.2f, %.2f, %.2f] --> [%.2f, %.2f]"
-		, start.x, start.y, start.theta, goal.x, goal.y);
-	vector<State> path = state_space.get_path(start, goal);
-	ROS_WARN("Generated path length %zd", path.size());
-
-	feedback_.current_number = (int32_t)path.size();
-	result_.final_count = 0;
-	as_.publishFeedback(feedback_);
-	// as_.setAborted(result_, "Failed");
-	ros::Rate rate(5);
-	for(progress = 1 ; progress <= goal->count; progress++) {
-		//Check for ros
-		if(!ros::ok()){
-			result.final_count = progress;
-			as.setAborted(result,"I failed !");
-			ROS_INFO("%s Shutting down",action_name.c_str());
-			break;
-		}
-
-		if(!as.isActive() || as.isPreemptRequested()){
-			return;
-		}       
-
-		if(goal->count <= progress){
-			ROS_INFO("%s Succeeded at getting to goal %d", action_name.c_str(), goal->count);
-			result.final_count = progress;
-			as.setSucceeded(result);
-
-		}else{
-			ROS_INFO("Setting to goal %d / %d",feedback.current_number,goal->count);
-			feedback.current_number = progress;
-			as.publishFeedback(feedback);
-		}
-		rate.sleep();
-	} 
-#endif
 }
 
 #if 0 // server callback
@@ -519,24 +527,42 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
     _curvature = 0.5 * (kl + kr); // average curvature
 	_s = _wheel_radius * 0.5 * (sl + sr);
 
-	std_msgs::Float64 r_speed, l_speed, r_delta, l_delta;
 	double throttle = 0, curvature = 0;
 
 	if (!_havePoseAvg || now > _tfTimeout) {
 		ROS_ERROR_THROTTLE(1, "No pose estimate watchdog; no vehicle control");	
 		_gear = 0;
-		goto output_;
 	}
-	if (_dist2Trailer < _safe_distance) {
-		ROS_ERROR_THROTTLE(1, "Unsafe distance %.3f; stopped", _dist2Trailer);	
-		_gear = 0;
-		goto output_;
-	}
+	switch(_gear) {
+		case -128: throttle = 0; break;// fatal
+		case -127: //E-stopping
+			ROS_WARN_THROTTLE(1, "E-stopping");
+			if (wl == 0 && wr == 0) { // stopped
+				++_gear;
+			}
+			// fall through
+		case -126: throttle = 0; break;// Need a new path; tell the path planner and wait
 
-	control(throttle, curvature);
-output_:
+		case -1: // reverse => approaching the trailer
+			if (_dist2Trailer < _safe_distance) {
+				ROS_ERROR_THROTTLE(1, "Unsafe distance %.3f; stopping"
+						, _dist2Trailer);
+				_openControlQ.clear(); _openStateQ.clear();
+				_gear = -127; // ESTOP
+				throttle = 0;
+			} else {
+				control(throttle, curvature);
+			}
+			break;
+		default: // forward or neutral
+			control(throttle, curvature);
+			break;
+	} // end switch(_gear)
+
 	// Done with bicycle model; distribute the bicycle model to the L/R wheels
 	curvature = clamp(curvature, -_max_kappa, _max_kappa);
+
+	std_msgs::Float64 r_speed, l_speed, r_delta, l_delta;
     if (fabs(curvature) > 1E-4) {
         auto R = 1.0/curvature
 			// Require R > 2*wheel_tread (= track_width)
@@ -544,8 +570,8 @@ output_:
             , r = atan(_wheel_base / (R + _wheel_tread));
         l_delta.data = clamp(l, -kMaxSteer, kMaxSteer);
         r_delta.data = clamp(r, -kMaxSteer, kMaxSteer);
-    } else {
-        r_delta.data = l_delta.data = 0;
+    // } else { // unnecessary since Float64 is initialized to 0 anyway
+    //     r_delta.data = l_delta.data = 0;
     }
 
 	// if (fabs(throttle) > 0.01) {
@@ -563,7 +589,7 @@ output_:
 				, _rel_x_ave, _rel_y_ave, _rel_yaw_ave
 				, _trueFootprintPose[0], _trueFootprintPose[1]);
 	} else {
-		ROS_INFO_THROTTLE(0.2, "Gear %d, throttle %.2f, curvature %.2f vs. actual %.2f"
+		ROS_DEBUG_THROTTLE(0.2, "Gear %d, throttle %.2f, curvature %.2f vs. actual %.2f"
 				, _gear, throttle, curvature, _curvature);
 		_rw_pub.publish(r_speed);
 		_lw_pub.publish(l_speed);
@@ -584,7 +610,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 		const auto& ctrl = _openControlQ.front();
 		curvature = ctrl.kappa;
 
-		if (_gear == 0) { 
+		if (!_gear) { // I use neutral to switch between gears 
 			auto e = ctrl.kappa - _curvature;
 			if (fabs(e) < 0.05) {
 				_gear = 1 - 2*signbit(ctrl.delta_s);

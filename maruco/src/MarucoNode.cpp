@@ -374,15 +374,17 @@ void Maruco::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 			// optional args
 			// detector parameters, rejectedImgPoints, _intrinsic, _distortion
 			);
+		Vec3d rvec, tvec;
 		if(markerIds.size() <= 0
 			|| !aruco::estimatePoseBoard(markerCorners, markerIds, board_
-					, _intrinsic, _distortion
+					, _intrinsic, _distortion //, rvec, tvec
 					, camState_[camId].rvec, camState_[camId].tvec
 					// sometimes yields Z axis going INTO the board. so can't use this
 					// , cv::SOLVEPNP_P3P
 					)) {
 			return;
 		}
+		rvec = camState_[camId].rvec; tvec = camState_[camId].tvec;
 		string markerIdStr = format("%d", markerIds[0]);
 		for (auto i=1; i < markerIds.size(); ++i) {
 			markerIdStr += format(",%d", markerIds[i]);
@@ -394,17 +396,14 @@ void Maruco::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 		// Record the latest valid board observation score
 		_detectedQ.push_back({msg->header.stamp, camId, markerIds});
 		auto elapsed = ros::Time::now() - t0;
-		float angle = sqrt(camState_[camId].rvec[0] * camState_[camId].rvec[0]
-						+ camState_[camId].rvec[1] * camState_[camId].rvec[1]
-						+ camState_[camId].rvec[2] * camState_[camId].rvec[2]);
+		float angle = sqrt(rvec[0] * rvec[0] + rvec[1] * rvec[1] + rvec[2] * rvec[2]);
 		float sina2 = sin(0.5f * angle);
 		float scale = sina2 / angle;
 
 		ROS_DEBUG("markers (%s) in cam%u; T = [%.2f, %.2f, %.2f] R = [%.2f, %.2f, %.2f]"
 				" "
 				, markerIdStr.c_str(), camId
-				, camState_[camId].tvec[0], camState_[camId].tvec[1], camState_[camId].tvec[2]
-				, camState_[camId].rvec[0], camState_[camId].rvec[1], camState_[camId].rvec[2]
+				, tvec[0], tvec[1], tvec[2], rvec[0], rvec[1], rvec[2]
 				);
 
 		/* Publish TF note the flipping from CV --> ROS
@@ -428,9 +427,7 @@ void Maruco::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 						:		|					/
 						Z-		Y+				   Z+
 		*/
-		tf2::Quaternion Q(camState_[camId].rvec[2] * scale
-						, -camState_[camId].rvec[0] * scale
-						, -camState_[camId].rvec[1] * scale
+		tf2::Quaternion Q(rvec[2] * scale, -rvec[0] * scale, -rvec[1] * scale
 						, cos(0.5f * angle));
 		// Q = sQcv2ros * Q;
 		// Q *= sQx180; // right multiply the flipping of the aruco axis
@@ -441,9 +438,9 @@ void Maruco::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 		cam2marker.pose.orientation.y = Q.y();
 		cam2marker.pose.orientation.z = Q.z();
 		cam2marker.pose.orientation.w = Q.w();
-		cam2marker.pose.position.x =  camState_[camId].tvec[2];
-		cam2marker.pose.position.y = -camState_[camId].tvec[0];
-		cam2marker.pose.position.z = -camState_[camId].tvec[1];
+		cam2marker.pose.position.x =  tvec[2];
+		cam2marker.pose.position.y = -tvec[0];
+		cam2marker.pose.position.z = -tvec[1];
 		cam2marker.header.stamp = msg->header.stamp;
 		cam2marker.header.frame_id = format("quad%d_link", camId);
 		static uint32_t sSeq = 0;
@@ -469,8 +466,7 @@ void Maruco::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 				, Q.x(), Q.y(), Q.z(), Q.w(), axis[0], axis[1], axis[2], Q.getAngle());
 		}
 		if (_show_axis) { // Show the board frame
-		  	cv::aruco::drawAxis(frame, _intrinsic, _distortion
-			  	, camState_[camId].rvec, camState_[camId].tvec, 0.8);
+		  	cv::aruco::drawAxis(frame, _intrinsic, _distortion, rvec, tvec, 0.8);
 			auto img = boost::make_shared<sensor_msgs::Image>();
 			convert_frame_to_message(frame, img);
 			// preserve the timestamp from the image frame

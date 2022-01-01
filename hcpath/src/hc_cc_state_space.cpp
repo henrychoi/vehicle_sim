@@ -57,21 +57,31 @@ void HC_CC_State_Space::set_filter_parameters(const Motion_Noise &motion_noise,
   ekf_.set_parameters(motion_noise, measurement_noise, controller);
 }
 
-vector<Control> HC_CC_State_Space::get_path(const State &state1, const State &state2
-, vector<State>& path) const
+float HC_CC_State_Space::get_path(const State &state1, const State &state2
+  , vector<Control>& control, vector<State>& path) const
 {
-  vector<Control> controls = get_controls(state1, state2);
-  (void)integrate(state1, controls, path);
-  return controls;
+  const auto controls = get_controls(state1, state2);
+  integrate(state1, controls, path);
+  float s = 0;
+  for (auto& ctrl : controls) {
+    control.push_back(ctrl);
+    s += abs(ctrl.delta_s);
+  }
+  return s;
 }
 
-vector<Control> HC_CC_State_Space::get_path_with_covariance(
+float HC_CC_State_Space::get_path_with_covariance(
   const State_With_Covariance &state1, const State &state2
-  , vector<State_With_Covariance>& path_with_covariance) const
+  , vector<Control>& control, vector<State_With_Covariance>& path_with_covariance) const
 {
-  vector<Control> controls = get_controls(state1.state, state2);
-  (void)integrate_with_covariance(state1, controls, path_with_covariance);
-  return controls;
+  const auto controls = get_controls(state1.state, state2);
+  integrate_with_covariance(state1, controls, path_with_covariance);
+  float s = 0;
+  for (auto& ctrl : controls) {
+    control.push_back(ctrl);
+    s += abs(ctrl.delta_s);
+  }
+  return s;
 }
 
 vector<State>& HC_CC_State_Space::integrate(

@@ -57,6 +57,47 @@ public:
 };
 
 /** \brief cc-dubins path types: E (Empty), S (Straight), T (Turn) */
+namespace cc_dubins
+{
+enum path_type
+{
+  E,
+  S,
+  T,
+  TT,
+  // Dubins families:
+  TST,
+  TTT,
+  // #####################
+  TTTT
+};
+}
+const int nb_cc_dubins_paths = 7;
+
+class CC_Dubins_Path : public Path
+{
+public:
+  /** \brief Constructor */
+  CC_Dubins_Path(const Configuration &_start, const Configuration &_end, cc_dubins::path_type _type, double _kappa,
+                 double _sigma, Configuration *_qi1, Configuration *_qi2, Configuration *_qi3, Configuration *_qi4,
+                 HC_CC_Circle *_cstart, HC_CC_Circle *_cend, HC_CC_Circle *_ci1, HC_CC_Circle *_ci2, double _length);
+
+  /** \brief Destructor */
+  ~CC_Dubins_Path();
+
+  /** \brief Alphanumeric display */
+  void print(bool eol) const;
+
+  /** \brief Path type */
+  cc_dubins::path_type type;
+
+  /** \brief Intermediate configurations */
+  Configuration *qi1, *qi2, *qi3, *qi4;
+
+  /** \brief Start, end and intermediate circles */
+  HC_CC_Circle *cstart, *cend, *ci1, *ci2;
+};
+
 /** \brief hc-/cc-reeds-shepp path types: E (Empty), S (Straight), T (Turn), c (Cusp) */
 namespace hc_cc_rs
 {

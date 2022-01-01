@@ -28,11 +28,15 @@ catkin_package(
   )
 catkin_package(DEPENDS Boost)
 
-add_executable(hcpath src/HcPathNode.cpp
+add_executable(hcpath src/HcPathNode.cpp src/cute_c2.cpp
 	src/configuration.cpp  src/utilities.cpp src/ekf.cpp
 	src/hc_cc_circle.cpp src/paths.cpp
 	src/hc_cc_state_space.cpp
-	src/hcpmpm_reeds_shepp_state_space.cpp src/cute_c2.cpp
+	src/hc_cc_state_space.cpp
+	src/hcpmpm_reeds_shepp_state_space.cpp
+	src/cc_dubins_state_space.cpp
+	src/cc00_dubins_state_space.cpp  src/cc0pm_dubins_state_space.cpp 
+	src/ccpm0_dubins_state_space.cpp src/ccpmpm_dubins_state_space.cpp
 	)
 target_link_libraries(hcpath ${catkin_LIBRARIES}
 # 	${Boost_INCLUDE_DIRS}
