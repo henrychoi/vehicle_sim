@@ -400,11 +400,10 @@ void Maruco::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 		float sina2 = sin(0.5f * angle);
 		float scale = sina2 / angle;
 
-		ROS_DEBUG("markers (%s) in cam%u; T = [%.2f, %.2f, %.2f] R = [%.2f, %.2f, %.2f]"
-				" "
+		ROS_INFO_THROTTLE(1,
+				"markers (%s) in cam%u; T = [%.2f, %.2f, %.2f] R = [%.2f, %.2f, %.2f]"
 				, markerIdStr.c_str(), camId
-				, tvec[0], tvec[1], tvec[2], rvec[0], rvec[1], rvec[2]
-				);
+				, tvec[0], tvec[1], tvec[2], rvec[0], rvec[1], rvec[2]);
 
 		/* Publish TF note the flipping from CV --> ROS
 			Units should be in meters and radians. The OpenCV uses
@@ -488,7 +487,7 @@ const geometry_msgs::PoseStamped* cam2marker
     	tf2_buffer_.transform(*cam2marker, quad2marker, "quad_link");
 		tf2::Quaternion Q;
 		tf2::fromMsg(quad2marker.pose.orientation, Q);
-		ROS_DEBUG(//"%d.%03u "
+		ROS_DEBUG_THROTTLE(1, //"%d.%03u "
 			"cam %d [%.3f, %.3f; %.2f, %.2f, %.2f, %.2f] in quad_link"
 			//, quad2marker.header.stamp.sec, quad2marker.header.stamp.nsec/1000000
 			, camId

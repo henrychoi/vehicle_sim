@@ -584,10 +584,10 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 
 	if (_manualOverride) {
 		ROS_INFO_THROTTLE(0.5, // "dl %.3g, dr %.3g, sl %.3g, sr %.3g "
-				"^[%.2f, %.2f, %.2f] vs truth (%.2f, %.2f)"
+				"^[%.2f, %.2f, %.2f] vs truth (%.2f, %.2f, %.2f)"
 				// , dl, dr, sl, sr
 				, _rel_x_ave, _rel_y_ave, _rel_yaw_ave
-				, _trueFootprintPose[0], _trueFootprintPose[1]);
+				, _trueFootprintPose[0], _trueFootprintPose[1], _trueFootprintPose[2]);
 	} else {
 		ROS_DEBUG_THROTTLE(0.2, "Gear %d, throttle %.2f, curvature %.2f vs. actual %.2f"
 				, _gear, throttle, curvature, _curvature);
@@ -778,19 +778,19 @@ void HcPathNode::onGazeboLinkStates(const gazebo_msgs::LinkStates &links) {
 	}
 	auto& tp_link = links.pose[base_idx];
 	auto& tp_trailer = links.pose[trailer_idx];
-	_trueFootprintPose[0] = tp_link.position.x - tp_trailer.position.x;
-	_trueFootprintPose[1] = tp_link.position.y - tp_trailer.position.y;
-	_trueFootprintPose[2] = tp_link.position.z - tp_trailer.position.z;
 
-#if 0
+#if 1
 	tf2::Quaternion Qlink, Qtrailer;
 	tf2::fromMsg(tp_link.orientation, Qlink);
 	tf2::fromMsg(tp_trailer.orientation, Qtrailer);
 	// rotation FROM trailer TO the base_link
 	const auto Q = Qlink * Qtrailer.inverse();
 	tf2::Vector3 axis = Q.getAxis();
-	auto yaw_gt = Q.getAngle() * (1 - 2*signbit(axis[2]));
+	_trueFootprintPose[2] = Q.getAngle() * (1 - 2*signbit(axis[2]));
 #endif
+	_trueFootprintPose[0] = tp_link.position.x - tp_trailer.position.x;
+	_trueFootprintPose[1] = tp_link.position.y - tp_trailer.position.y;
+	// _trueFootprintPose[2] = tp_link.position.z - tp_trailer.position.z;
 	ROS_DEBUG("trailer to base truth; "
 			//"(%.2f, %.2f) - (%.2f, %.2f) = "
 			"(%.2f, %.2f);"//" %.2f"
