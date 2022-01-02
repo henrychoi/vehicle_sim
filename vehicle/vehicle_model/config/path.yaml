@@ -10,7 +10,7 @@ footprint: # legacy
   [0.377, -0.255]]
 
 path:
-  safe_distance: 0.02 # [m] insist on minimum distance
+  safe_distance: 0.04 # [m] insist on minimum distance
   # the truck chassis can be considered to consist of 2 rectangles,
   # (with 0,0 being the base_link):
   # min (-0.076, -0.165) max (0.177, +0.165)
@@ -27,7 +27,7 @@ path:
     [0.177, -0.165]]
 
   kappa_max: 1.48 # [1/m]
-  sigma_max: 3 # [1/m^2]; want more responsive steering
+  sigma_max: 8.6 # [1/m^2]; want more responsive steering
 
   # Check "Vehicle Teleoperation Weekly Meeting_20210910.pptx"
   wheel_base:   0.267  # [m]

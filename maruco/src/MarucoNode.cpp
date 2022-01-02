@@ -400,7 +400,7 @@ void Maruco::onFrame(const sensor_msgs::ImageConstPtr& msg) {
 		float sina2 = sin(0.5f * angle);
 		float scale = sina2 / angle;
 
-		ROS_INFO_THROTTLE(1,
+		ROS_DEBUG_THROTTLE(1,
 				"markers (%s) in cam%u; T = [%.2f, %.2f, %.2f] R = [%.2f, %.2f, %.2f]"
 				, markerIdStr.c_str(), camId
 				, tvec[0], tvec[1], tvec[2], rvec[0], rvec[1], rvec[2]);

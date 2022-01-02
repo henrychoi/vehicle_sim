@@ -19,7 +19,7 @@
 
   <!-- spawn the truck at a desired X and Y -->
   <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model"
-    args="-param robot_description -urdf -model autoware_gazebo -x 1 -y 0.5"/>
+    args="-param robot_description -urdf -model autoware_gazebo -x 1 -y 1 -Y 0.7"/>
 
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
 
@@ -112,7 +112,7 @@
     <param name="deadman_btn" type="int" value="4"/> <!-- LR button-->
     <param name="Kforward_s" type="double" value="10"/>
     <param name="Kback_axial" type="double" value="20"/>
-    <param name="Kback_intaxial" type="double" value="0.05"/>
+    <param name="Kback_intaxial" type="double" value="0.02"/>
     <param name="Kback_theta" type="double" value="1"/>
     <param name="Kback_kappa" type="double" value="0.5"/>
     <param name="Kback_intkappa" type="double" value="0.01"/>

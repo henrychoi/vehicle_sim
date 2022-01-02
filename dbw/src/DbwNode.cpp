@@ -22,7 +22,7 @@ class DbwNode {
     int steer_axis_, throttle_axis_, deadman_btn_, x_btn_;
 	float steer_gain_, throttle_gain_;
 
-	static constexpr size_t kXbtnBufferSize = 10;
+	static constexpr size_t kXbtnBufferSize = 5;
 	boost::circular_buffer<int8_t> xQ_;
 	bool x_btn_state = false;
 
@@ -74,12 +74,12 @@ void DbwNode::onInput(const sensor_msgs::Joy::ConstPtr& input) {
 	xQ_.push_back((int8_t)input->buttons[x_btn_]);
 	int8_t xSum = std::accumulate(xQ_.begin(), xQ_.end(), 0);
 	if (x_btn_state) {// debounce with hysterisis filter
-		if (xSum < 3) {
+		if (xSum < 1) {
 			x_btn_state = false;
 		}
 	} else {
 		// copy out the variance
-		if (xSum > (kXbtnBufferSize - 3)) {
+		if (xSum > (kXbtnBufferSize - 1)) {
 			x_btn_state = true;
 			//startPathAction();
 			hcpath::parkGoal req;
