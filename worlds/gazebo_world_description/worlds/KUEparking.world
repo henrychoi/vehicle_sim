@@ -116,8 +116,7 @@
         <child>kingpin</child>
       </joint>
       <link name='kingpin'>
-        <!-- slightly in front of the front leg pair (leg1 and leg2) -->
-        <pose>0.30 0 -.15  0 0 0</pose>
+        <pose>0.27 0 -.22  0 0 0</pose>
         <inertial>
           <mass>0.005</mass>
           <inertia>
@@ -134,6 +133,80 @@
         <visual name="visual">
           <geometry>
             <cylinder><radius>0.005</radius><length>0.03</length></cylinder>
+          </geometry>
+          <material> <!-- red -->
+            <ambient>1 0 0 1</ambient>
+            <diffuse>1 0 0 1</diffuse>
+            <specular>0 0 0 1</specular>
+            <emissive>0 0 0 0</emissive>
+          </material>
+        </visual>
+      </link>
+
+      <joint name="hitch_center_joint" type="fixed">
+        <parent>trailer</parent>
+        <child>hitch_center</child>
+      </joint>
+      <link name='hitch_center'>
+        <pose>-.27 -.22  0 0 0</pose>
+      </link>
+
+      <joint name="Lhitch_joint" type="fixed">
+        <parent>hitch_center</parent>
+        <child>Lhitch</child>
+      </joint>
+      <link name='Lhitch'>
+        <!-- slightly in front of the front leg pair (leg1 and leg2) -->
+        <pose>0 -.20 0  0 0 0</pose>
+        <inertial>
+          <mass>0.005</mass>
+          <inertia>
+            <ixx>0.001</ixx><ixy>0.0</ixy><ixz>0.0</ixz>
+              <iyy>0.001</iyy><iyz>0.0</iyz>
+                <izz>0.0001</izz>
+          </inertia>
+        </inertial>
+        <collision name="collision">
+          <geometry>
+            <cylinder><radius>0.005</radius><length>0.02</length></cylinder>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <cylinder><radius>0.005</radius><length>0.02</length></cylinder>
+          </geometry>
+          <material> <!-- red -->
+            <ambient>1 0 0 1</ambient>
+            <diffuse>1 0 0 1</diffuse>
+            <specular>0 0 0 1</specular>
+            <emissive>0 0 0 0</emissive>
+          </material>
+        </visual>
+      </link>
+
+      <joint name="Rhitch_joint" type="fixed">
+        <parent>hitch_center</parent>
+        <child>Rhitch</child>
+      </joint>
+      <link name='Rhitch'>
+        <!-- slightly in front of the front leg pair (leg1 and leg2) -->
+        <pose>0 .20 0  0 0 0</pose>
+        <inertial>
+          <mass>0.005</mass>
+          <inertia>
+            <ixx>0.001</ixx><ixy>0.0</ixy><ixz>0.0</ixz>
+              <iyy>0.001</iyy><iyz>0.0</iyz>
+                <izz>0.0001</izz>
+          </inertia>
+        </inertial>
+        <collision name="collision">
+          <geometry>
+            <cylinder><radius>0.005</radius><length>0.02</length></cylinder>
+          </geometry>
+        </collision>
+        <visual name="visual">
+          <geometry>
+            <cylinder><radius>0.005</radius><length>0.02</length></cylinder>
           </geometry>
           <material> <!-- red -->
             <ambient>1 0 0 1</ambient>
@@ -241,7 +314,7 @@
       </link>
       
       <link name="leg1">
-        <pose>0.27 0.22 -0.25 0 0 0</pose>
+        <pose>0.27 0.23 -0.25 0 0 0</pose>
         <inertial>
           <mass>0.25</mass>
           <inertia>
@@ -272,7 +345,7 @@
 
       <link name="leg2">
         <static>false</static>
-        <pose>0.27 -0.22 -0.25 0 0 0</pose>
+        <pose>0.27 -0.23 -0.25 0 0 0</pose>
         <inertial>
           <inertia>
             <ixx>0.083</ixx><ixy>0.0</ixy><ixz>0.0</ixz>
@@ -303,7 +376,7 @@
 
       <link name="leg3">
         <static>false</static>
-        <pose>-0.27 0.22 -0.25 0 0 0</pose>
+        <pose>-0.27 0.23 -0.25 0 0 0</pose>
         <inertial>
           <mass>0.25</mass>
           <inertia>
@@ -333,7 +406,7 @@
       </joint>
 
       <link name="leg4">
-        <pose>-0.27 -0.22 -0.25 0 0 0</pose>
+        <pose>-0.27 -0.23 -0.25 0 0 0</pose>
         <inertial>
           <mass>0.25</mass>
           <inertia>
