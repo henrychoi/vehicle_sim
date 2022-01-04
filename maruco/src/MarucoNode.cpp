@@ -188,121 +188,122 @@ Maruco::Maruco()
 
 	vector<vector<cv::Point3f>> corners;
 	//front
-	corners.push_back({Point3f(	+0.255,		-0.15	,	+0.375)// top row
-					, Point3f(	+0.085,		-0.15	,	+0.375)
-					, Point3f(	+0.085,		-0		,	+0.375)
-					, Point3f(	+0.255,		-0		,	+0.375)});
-	corners.push_back({Point3f(	+0.085,		-0.15	,	+0.375)
-					, Point3f(	-0.085,		-0.15	,	+0.375)
-					, Point3f(	-0.085,		-0		,	+0.375)
-					, Point3f(	+0.085,		-0		,	+0.375)});
-	corners.push_back({Point3f(	-0.085,		-0.15	,	+0.375)
-					, Point3f(	-0.255,		-0.15	,	+0.375)
-					, Point3f(	-0.255,		-0		,	+0.375)
-					, Point3f(	-0.085,		-0		,	+0.375)});
-	corners.push_back({Point3f(	+0.255,		+0		,	+0.375)// bottom row
-					, Point3f(	+0.085,		+0		,	+0.375)
-					, Point3f(	+0.085,		+0.15	,	+0.375)
-					, Point3f(	+0.255,		+0.15	,	+0.375)});
-	corners.push_back({Point3f(	+0.085,		+0		,	+0.375)
-					, Point3f(	-0.085,		+0		,	+0.375)
-					, Point3f(	-0.085,		+0.15	,	+0.375)
-					, Point3f(	+0.085,		+0.15	,	+0.375)});
-	corners.push_back({Point3f(	-0.085,		+0		,	+0.375)
-					, Point3f(	-0.255,		+0		,	+0.375)
-					, Point3f(	-0.255,		+0.15	,	+0.375)
-					, Point3f(	-0.085,		+0.15	,	+0.375)});
+	corners.push_back({Point3f(	+0.254,		-0.14	,	+0.375)// top row
+
+					, Point3f(	+0.086,		-0.14	,	+0.375)
+					, Point3f(	+0.086,		-0.05	,	+0.375)
+					, Point3f(	+0.254,		-0.05	,	+0.375)});
+	corners.push_back({Point3f(	+0.086,		-0.14	,	+0.375)
+					, Point3f(	-0.086,		-0.14	,	+0.375)
+					, Point3f(	-0.086,		-0.05	,	+0.375)
+					, Point3f(	+0.086,		-0.05	,	+0.375)});
+	corners.push_back({Point3f(	-0.086,		-0.14	,	+0.375)
+					, Point3f(	-0.254,		-0.14	,	+0.375)
+					, Point3f(	-0.254,		-0.05	,	+0.375)
+					, Point3f(	-0.086,		-0.05	,	+0.375)});
+	corners.push_back({Point3f(	+0.254,		+0.05	,	+0.375)// bottom row
+					, Point3f(	+0.086,		+0.05	,	+0.375)
+					, Point3f(	+0.086,		+0.14	,	+0.375)
+					, Point3f(	+0.254,		+0.14	,	+0.375)});
+	corners.push_back({Point3f(	+0.086,		+0.05	,	+0.375)
+					, Point3f(	-0.086,		+0.05	,	+0.375)
+					, Point3f(	-0.086,		+0.14	,	+0.375)
+					, Point3f(	+0.086,		+0.14	,	+0.375)});
+	corners.push_back({Point3f(	-0.086,		+0.05	,	+0.375)
+					, Point3f(	-0.254,		+0.05	,	+0.375)
+					, Point3f(	-0.254,		+0.14	,	+0.375)
+					, Point3f(	-0.086,		+0.14	,	+0.375)});
 	// right,		
-	corners.push_back({Point3f(	+0.255,		-0.15	,	-0.375	)// top row
-					, Point3f(	+0.255,		-0.15	,	-0.1875)
-					, Point3f(	+0.255,		-0		,	-0.1875)
-					, Point3f(	+0.255,		-0		,	-0.375	)});
-	corners.push_back({Point3f(	+0.255,		-0.15	,	-0.1875)
-					, Point3f(	+0.255,		-0.15	,	-0	)
-					, Point3f(	+0.255,		-0		,	-0	)
-					, Point3f(	+0.255,		-0		,	-0.1875)});
-	corners.push_back({Point3f(	+0.255,		-0.15	,	+0	)
-					, Point3f(	+0.255,		-0.15	,	+0.1875)
-					, Point3f(	+0.255,		-0		,	+0.1875)
-					, Point3f(	+0.255,		-0		,	+0	)});
-	corners.push_back({Point3f(	+0.255,		-0.15	,	+0.1875)
-					, Point3f(	+0.255,		-0.15	,	+0.375	)
-					, Point3f(	+0.255,		-0		,	+0.375	)
-					, Point3f(	+0.255,		-0		,	+0.187	)});
-	corners.push_back({Point3f(	+0.255,		+0		,	-0.375	)// bottom row
-					, Point3f(	+0.255,		+0		,	-0.1875)
-					, Point3f(	+0.255,		+0.15	,	-0.1875)
-					, Point3f(	+0.255,		+0.15	,	-0.375	)});
-	corners.push_back({Point3f(	+0.255,		+0		,	-0.1875)
-					, Point3f(	+0.255,		+0		,	-0	)
-					, Point3f(	+0.255,		+0.15	,	-0	)
-					, Point3f(	+0.255,		+0.15	,	-0.1875)});
-	corners.push_back({Point3f(	+0.255,		+0		,	+0	)
-					, Point3f(	+0.255,		+0		,	+0.1875)
-					, Point3f(	+0.255,		+0.15	,	+0.1875)
-					, Point3f(	+0.255,		+0.15	,	+0	)});
-	corners.push_back({Point3f(	+0.255,		+0		,	+0.1875)
-					, Point3f(	+0.255,		+0		,	+0.375	)
-					, Point3f(	+0.255,		+0.15	,	+0.375	)
-					, Point3f(	+0.255,		+0.15	,	+0.1875)});
+	corners.push_back({Point3f(	+0.255,		-0.14	,	-0.374	)// top row
+					, Point3f(	+0.255,		-0.14	,	-0.1885)
+					, Point3f(	+0.255,		-0.05	,	-0.1885)
+					, Point3f(	+0.255,		-0.05	,	-0.374	)});
+	corners.push_back({Point3f(	+0.255,		-0.14	,	-0.1885)
+					, Point3f(	+0.255,		-0.14	,	-0	)
+					, Point3f(	+0.255,		-0.05	,	-0	)
+					, Point3f(	+0.255,		-0.05	,	-0.1885)});
+	corners.push_back({Point3f(	+0.255,		-0.14	,	+0	)
+					, Point3f(	+0.255,		-0.14	,	+0.1885)
+					, Point3f(	+0.255,		-0.05	,	+0.1885)
+					, Point3f(	+0.255,		-0.05	,	+0	)});
+	corners.push_back({Point3f(	+0.255,		-0.14	,	+0.1885)
+					, Point3f(	+0.255,		-0.14	,	+0.374	)
+					, Point3f(	+0.255,		-0.05	,	+0.374	)
+					, Point3f(	+0.255,		-0.05	,	+0.1885	)});
+	corners.push_back({Point3f(	+0.255,		+0.05	,	-0.374	)// bottom row
+					, Point3f(	+0.255,		+0.05	,	-0.1885)
+					, Point3f(	+0.255,		+0.14	,	-0.1885)
+					, Point3f(	+0.255,		+0.14	,	-0.374	)});
+	corners.push_back({Point3f(	+0.255,		+0.05	,	-0.1885)
+					, Point3f(	+0.255,		+0.05	,	-0	)
+					, Point3f(	+0.255,		+0.14	,	-0	)
+					, Point3f(	+0.255,		+0.14	,	-0.1885)});
+	corners.push_back({Point3f(	+0.255,		+0.05	,	+0	)
+					, Point3f(	+0.255,		+0.05	,	+0.1885)
+					, Point3f(	+0.255,		+0.14	,	+0.1885)
+					, Point3f(	+0.255,		+0.14	,	+0	)});
+	corners.push_back({Point3f(	+0.255,		+0.05	,	+0.1885)
+					, Point3f(	+0.255,		+0.05	,	+0.374	)
+					, Point3f(	+0.255,		+0.14	,	+0.374	)
+					, Point3f(	+0.255,		+0.14	,	+0.1885)});
 	// rear,		
-	corners.push_back({Point3f(	-0.255,		-0.15	,	-0.375)// top row
-					, Point3f(	-0.085,		-0.15	,	-0.375)
-					, Point3f(	-0.085,		-0		,	-0.375)
-					, Point3f(	-0.255,		-0		,	-0.375)});
-	corners.push_back({Point3f(	-0.085,		-0.15	,	-0.375)
-					, Point3f(	+0.085,		-0.15	,	-0.375)
-					, Point3f(	+0.085,		-0		,	-0.375)
-					, Point3f(	-0.085,		-0		,	-0.375)});
-	corners.push_back({Point3f(	+0.085,		-0.15	,	-0.375)
-					, Point3f(	+0.255,		-0.15	,	-0.375)
-					, Point3f(	+0.255,		-0		,	-0.375)
-					, Point3f(	+0.085,		-0		,	-0.375)});
-	corners.push_back({Point3f(	-0.255,		+0		,	-0.375)// bottom row
-					, Point3f(	-0.085,		+0		,	-0.375)
-					, Point3f(	-0.085,		+0.15	,	-0.375)
-					, Point3f(	-0.255,		+0.15	,	-0.375)});
-	corners.push_back({Point3f(	-0.085,		+0		,	-0.375)
-					, Point3f(	+0.085,		+0		,	-0.375)
-					, Point3f(	+0.085,		+0.15	,	-0.375)
-					, Point3f(	-0.085,		+0.15	,	-0.375)});
-	corners.push_back({Point3f(	+0.085,		+0		,	-0.375)
-					, Point3f(	+0.255,		+0		,	-0.375)
-					, Point3f(	+0.255,		+0.15	,	-0.375)
-					, Point3f(	+0.085,		+0.15	,	-0.375)});
+	corners.push_back({Point3f(	-0.254,		-0.14	,	-0.375)// top row
+					, Point3f(	-0.086,		-0.14	,	-0.375)
+					, Point3f(	-0.086,		-0.05	,	-0.375)
+					, Point3f(	-0.254,		-0.05	,	-0.375)});
+	corners.push_back({Point3f(	-0.086,		-0.14	,	-0.375)
+					, Point3f(	+0.086,		-0.14	,	-0.375)
+					, Point3f(	+0.086,		-0.05	,	-0.375)
+					, Point3f(	-0.086,		-0.05	,	-0.375)});
+	corners.push_back({Point3f(	+0.086,		-0.14	,	-0.375)
+					, Point3f(	+0.254,		-0.14	,	-0.375)
+					, Point3f(	+0.254,		-0.05	,	-0.375)
+					, Point3f(	+0.086,		-0.05	,	-0.375)});
+	corners.push_back({Point3f(	-0.254,		+0.05	,	-0.375)// bottom row
+					, Point3f(	-0.086,		+0.05	,	-0.375)
+					, Point3f(	-0.086,		+0.14	,	-0.375)
+					, Point3f(	-0.254,		+0.14	,	-0.375)});
+	corners.push_back({Point3f(	-0.086,		+0.05	,	-0.375)
+					, Point3f(	+0.086,		+0.05	,	-0.375)
+					, Point3f(	+0.086,		+0.14	,	-0.375)
+					, Point3f(	-0.086,		+0.14	,	-0.375)});
+	corners.push_back({Point3f(	+0.086,		+0.05	,	-0.375)
+					, Point3f(	+0.254,		+0.05	,	-0.375)
+					, Point3f(	+0.254,		+0.14	,	-0.375)
+					, Point3f(	+0.086,		+0.14	,	-0.375)});
 	// left,		
-	corners.push_back({Point3f(	-0.255,		-0.15	,	+0.375)// top row
-					, Point3f(	-0.255,		-0.15	,	+0.1875)
-					, Point3f(	-0.255,		-0		,	+0.1875)
-					, Point3f(	-0.255,		-0		,	+0.375)});
-	corners.push_back({Point3f(	-0.255,		-0.15	,	+0.1875)
-					, Point3f(	-0.255,		-0.15	,	+0	)
-					, Point3f(	-0.255,		-0		,	+0	)
-					, Point3f(	-0.255,		-0		,	+0.1875)});
-	corners.push_back({Point3f(	-0.255,		-0.15	,	-0	)
-					, Point3f(	-0.255,		-0.15	,	-0.1875)
-					, Point3f(	-0.255,		-0		,	-0.1875)
-					, Point3f(	-0.255,		-0		,	-0	)});
-	corners.push_back({Point3f(	-0.255,		-0.15	,	-0.1875)
-					, Point3f(	-0.255,		-0.15	,	-0.375	)
-					, Point3f(	-0.255,		-0		,	-0.375)
-					, Point3f(	-0.255,		-0		,	-0.1875)});
-	corners.push_back({Point3f(	-0.255,		+0		,	+0.375)// bottom row
-					, Point3f(	-0.255,		+0		,	+0.1875)
-					, Point3f(	-0.255,		+0.15	,	+0.1875)
-					, Point3f(	-0.255,		+0.15	,	+0.375)});
-	corners.push_back({Point3f(	-0.255,		+0		,	+0.1875)
-					, Point3f(	-0.255,		+0		,	+0.0)
-					, Point3f(	-0.255,		+0.15	,	+0.0)
-					, Point3f(	-0.255,		+0.15	,	+0.1875)});
-	corners.push_back({Point3f(	-0.255,		+0		,	-0	)
-					, Point3f(	-0.255, 	+0		,	-0.1875)
-					, Point3f(	-0.255,		+0.15	,	-0.1875)
-					, Point3f(	-0.255,		+0.15	,	-0	)});
-	corners.push_back({Point3f(	-0.255,		+0		,	-0.1875)
-					, Point3f(	-0.255,		+0		,	-0.375	)
-					, Point3f(	-0.255,		+0.15	,	-0.375	)
-					, Point3f(	-0.255,		+0.15	,	-0.1875)});
+	corners.push_back({Point3f(	-0.255,		-0.14	,	+0.374)// top row
+					, Point3f(	-0.255,		-0.14	,	+0.1885)
+					, Point3f(	-0.255,		-0.05	,	+0.1885)
+					, Point3f(	-0.255,		-0.05	,	+0.374)});
+	corners.push_back({Point3f(	-0.255,		-0.14	,	+0.1885)
+					, Point3f(	-0.255,		-0.14	,	+0	)
+					, Point3f(	-0.255,		-0.05	,	+0	)
+					, Point3f(	-0.255,		-0.05	,	+0.1885)});
+	corners.push_back({Point3f(	-0.255,		-0.14	,	-0	)
+					, Point3f(	-0.255,		-0.14	,	-0.1885)
+					, Point3f(	-0.255,		-0.05	,	-0.1885)
+					, Point3f(	-0.255,		-0.05	,	-0	)});
+	corners.push_back({Point3f(	-0.255,		-0.14	,	-0.1885)
+					, Point3f(	-0.255,		-0.14	,	-0.374	)
+					, Point3f(	-0.255,		-0.05	,	-0.374)
+					, Point3f(	-0.255,		-0.05	,	-0.1885)});
+	corners.push_back({Point3f(	-0.255,		+0.05	,	+0.374)// bottom row
+					, Point3f(	-0.255,		+0.05	,	+0.1885)
+					, Point3f(	-0.255,		+0.14	,	+0.1885)
+					, Point3f(	-0.255,		+0.14	,	+0.374)});
+	corners.push_back({Point3f(	-0.255,		+0.05	,	+0.1885)
+					, Point3f(	-0.255,		+0.05	,	+0.0)
+					, Point3f(	-0.255,		+0.14	,	+0.0)
+					, Point3f(	-0.255,		+0.14	,	+0.1885)});
+	corners.push_back({Point3f(	-0.255,		+0.05	,	-0	)
+					, Point3f(	-0.255, 	+0.05	,	-0.1885)
+					, Point3f(	-0.255,		+0.14	,	-0.1885)
+					, Point3f(	-0.255,		+0.14	,	-0	)});
+	corners.push_back({Point3f(	-0.255,		+0.05	,	-0.1885)
+					, Point3f(	-0.255,		+0.05	,	-0.374	)
+					, Point3f(	-0.255,		+0.14	,	-0.374	)
+					, Point3f(	-0.255,		+0.14	,	-0.1885)});
 	assert(ids.size() == corners.size());	
 
 	board_ = aruco::Board::create(InputArrayOfArrays(corners), dict, InputArray(ids));
