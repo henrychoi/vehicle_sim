@@ -18,7 +18,7 @@
       <visual>
         <origin xyz="0.025 -0.01 -0.085" rpy="1.570796 0 1.5707963"/>
         <geometry>
-          <mesh filename="package://vehicle_model/mesh/car_fifthwheel.dae" scale="1 1 1"/>
+          <mesh filename="package://vehicle_model/mesh/car_sidehitch.dae" scale="1 1 1"/>
         </geometry>
         <material name="black">
             <color rgba="${25/255} ${25/255} ${25/255} .9"/>
