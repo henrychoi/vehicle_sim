@@ -1,0 +1,13 @@
+material aruco_bottom_marker
+{
+	technique
+	{
+		pass
+		{
+			texture_unit
+			{
+		          texture  bottom_marker.jpg
+			}
+		}
+	}
+}
