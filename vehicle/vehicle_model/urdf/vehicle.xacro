@@ -55,7 +55,7 @@
   <!-- ================ sensor to base_link xforms ================ -->
 	<xacro:property name="calibration" value="${load_yaml('$(find vehicle_model)/config/calibration.yaml')}"/>
 
-  <xacro:quad_camera_macro prefix="up" parent="base_link"
+  <xacro:quad_camera_macro parent="base_link"
       x="${calibration['base_link2quad']['x']}"
       y="${calibration['base_link2quad']['y']}"
       z="${calibration['base_link2quad']['z']}"
@@ -63,13 +63,14 @@
       pitch="${calibration['base_link2quad']['pitch']}"
       yaw="${calibration['base_link2quad']['yaw']}"
       fps="15" width="1280" height="720" fov="1.6"/>
-  <xacro:imu_macro suffix="imu" parent="base_link" namespace=""
-                   x="${calibration['base_link2imu']['x']}"
-                   y="${calibration['base_link2imu']['y']}"
-                   z="${calibration['base_link2imu']['z']}"
-                   roll="${calibration['base_link2imu']['roll']}"
-                   pitch="${calibration['base_link2imu']['pitch']}"
-                   yaw="${calibration['base_link2imu']['yaw']}"
-                   fps="100" />
+
+  <xacro:monocular_camera_macro prefix="up" parent="base_link"
+      x="${calibration['base_link2camera']['x']}"
+      y="${calibration['base_link2camera']['y']}"
+      z="${calibration['base_link2camera']['z']}"
+      roll="${calibration['base_link2camera']['roll']}"
+      pitch="${calibration['base_link2camera']['pitch']}"
+      yaw="${calibration['base_link2camera']['yaw']}"
+      fps="15" width="640" height="480" fov="2.0"/>
 
 </robot>

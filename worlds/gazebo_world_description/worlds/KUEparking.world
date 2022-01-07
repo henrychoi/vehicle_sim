@@ -141,9 +141,6 @@
             <emissive>0 0 0 0</emissive>
           </material>
         </visual>
-        <sensor name='kingpin_contact' type='contact'>
-          <contact><collision>kingpin_collision</collision></contact>
-        </sensor>
       </link>
 
       <joint name="hitch_center_joint" type="fixed">
@@ -193,9 +190,6 @@
             <emissive>0 0 0 0</emissive>
           </material>
         </visual>
-        <sensor name='Lhitch_contact' type='contact'>
-          <contact><collision>Lhitch_collision</collision></contact>
-        </sensor>
       </link>
 
       <joint name="Rhitch_joint" type="fixed">
@@ -228,9 +222,6 @@
             <emissive>0 0 0 0</emissive>
           </material>
         </visual>
-        <sensor name='Rhitch_contact' type='contact'>
-          <contact><collision>Rhitch_collision</collision></contact>
-        </sensor>
       </link>
 
       <joint name="aruco_front_joint" type="fixed">
