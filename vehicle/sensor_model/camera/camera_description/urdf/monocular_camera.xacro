@@ -5,8 +5,8 @@
 
   <xacro:macro name="monocular_camera_macro"
     params="prefix parent x y z roll pitch yaw fps width height fov">
-    <xacro:property name="len" value="0.2" />
-    <xacro:property name="mass" value="0.1" />
+    <xacro:property name="len" value="0.001" />
+    <xacro:property name="mass" value="0.010" />
 
     <joint name="${prefix}_joint" type="fixed">
       <origin rpy="${roll} ${pitch} ${yaw}" xyz="${x} ${y} ${z}"/>
@@ -16,22 +16,17 @@
 
     <link name="${prefix}_link">
       <visual>
-        <geometry><cylinder length="${len}" radius="0.02"/></geometry>
-        <origin rpy="0 0 0" xyz="0 0 0"/>
-        <material name="red">
-          <color rgba="${255/255} ${108/255} ${10/255} 1.0"/>
-        </material>
+        <geometry><box size="${len} ${len} ${len}"/></geometry>
+        <material name="black"><color rgba="0 0 0 1.0"/></material>
       </visual>
       <inertial>
-        <origin rpy="0 0 0" xyz="0 0 0"/>
         <mass value="${mass}"/>
         <inertia ixx="${(len*len+len*len)*mass/12.0}" ixy="0.0" ixz="0.0" 
                  iyy="${(len*len+len*len)*mass/12.0}" iyz="0.0" 
                  izz="${(len*len+len*len)*mass/12.0}"/>
       </inertial>
       <collision>
-        <origin rpy="0 0 0" xyz="0 0 0"/>
-        <geometry><cylinder length="${len}" radius="0.02"/></geometry>
+        <geometry><box size="${len} ${len} ${len}"/></geometry>
       </collision>
     </link>
   

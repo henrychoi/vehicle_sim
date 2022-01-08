@@ -5,6 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /RobotModel1/Links1
+        - /TF1
         - /TF1/Frames1
         - /Camera1
       Splitter Ratio: 0.5
@@ -210,13 +211,13 @@ Visualization Manager:
       Frames:
         All Enabled: false
         base_footprint:
-          Value: true
-        base_link:
           Value: false
+        base_link:
+          Value: true
         hitch_center:
-          Value: true
+          Value: false
         kingpin:
-          Value: true
+          Value: false
         quad0_link:
           Value: false
         quad0_optical_link:
@@ -234,7 +235,7 @@ Visualization Manager:
         quad3_optical_link:
           Value: false
         quad_link:
-          Value: true
+          Value: false
         steering_front_link:
           Value: false
         steering_left_front_link:
@@ -244,17 +245,21 @@ Visualization Manager:
         trailer:
           Value: true
         up_link:
-          Value: true
+          Value: false
         up_optical_link:
-          Value: true
+          Value: false
         wheel_left_front_link:
           Value: true
+        wheel_left_rear_link:
+          Value: false
         wheel_right_front_link:
           Value: true
+        wheel_right_rear_link:
+          Value: false
       Marker Alpha: 1
       Marker Scale: 1
       Name: TF
-      Show Arrows: true
+      Show Arrows: false
       Show Axes: true
       Show Names: false
       Tree:
@@ -288,6 +293,10 @@ Visualization Manager:
             up_link:
               up_optical_link:
                 {}
+            wheel_left_rear_link:
+              {}
+            wheel_right_rear_link:
+              {}
       Update Interval: 0
       Value: true
     - Class: rviz/Image
@@ -432,4 +441,4 @@ Window Geometry:
     collapsed: true
   Width: 1406
   X: 933
-  Y: 711
+  Y: 637
