@@ -2,7 +2,7 @@
 <robot xmlns:xacro="http://ros.org/wiki/xacro">
 
     <gazebo reference="wheel_left_rear_link">
-      <material>Gazebo/Red</material>
+      <material>Gazebo/Black</material>
       <mu1 value="100000.0" />
       <mu2 value="100000.0" />
    		<kp value="1000000.0" />
@@ -11,7 +11,7 @@
       <maxVel  value="10.0" /> 
     </gazebo>
     <gazebo reference="wheel_right_rear_link">
-      <material>Gazebo/Red</material>
+      <material>Gazebo/Black</material>
       <mu1 value="100000.0" />
       <mu2 value="100000.0" />
    		<kp value="1000000.0" />
@@ -20,7 +20,7 @@
       <maxVel  value="10.0" /> 
     </gazebo>
     <gazebo reference="wheel_left_front_link">
-      <material>Gazebo/Red</material>
+      <material>Gazebo/Black</material>
       <mu1 value="100000.0" />
       <mu2 value="100000.0" />
    		<kp value="1000000.0" />
@@ -29,7 +29,7 @@
       <maxVel  value="10.0" /> 
     </gazebo>
     <gazebo reference="wheel_right_front_link">
-      <material>Gazebo/Red</material>
+      <material>Gazebo/Black</material>
       <mu1 value="100000.0" />
       <mu2 value="100000.0" />
    		<kp value="1000000.0" />

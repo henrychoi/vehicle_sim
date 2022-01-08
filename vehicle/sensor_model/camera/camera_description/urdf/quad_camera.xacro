@@ -37,16 +37,16 @@
     </link>
 
     <xacro:D430IR_macro parent="quad_link" instance="0"
-      yaw="-0.78540" x="0.04" y="-0.04" z="${len/2}"
+      yaw="0" x="0.05" y="0" z="${len/2}"
       fps="${fps}" width="${width}" height="${height}" fov="${fov}"/>
     <xacro:D430IR_macro parent="quad_link" instance="1"
-      yaw="0.78540" x="0.04" y="0.04" z="${len/2}"
+      yaw="1.5708" x="0.0" y="0.05" z="${len/2}"
       fps="${fps}" width="${width}" height="${height}" fov="${fov}"/>
     <xacro:D430IR_macro parent="quad_link" instance="2"
-      yaw="2.3562" x="-0.04" y="0.04" z="${len/2}"
+      yaw="3.14159" x="-0.05" y="0.0" z="${len/2}"
       fps="${fps}" width="${width}" height="${height}" fov="${fov}"/>
     <xacro:D430IR_macro parent="quad_link" instance="3"
-      yaw="-2.3562" x="-0.04" y="-0.04" z="${len/2}"
+      yaw="-1.5708" x="0.0" y="-0.05" z="${len/2}"
       fps="${fps}" width="${width}" height="${height}" fov="${fov}"/>
 
   </xacro:macro>

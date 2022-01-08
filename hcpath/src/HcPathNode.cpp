@@ -179,7 +179,7 @@ class HcPathNode {
 
 	struct SimplePose_ { complex<tf2Scalar> heading; tf2Scalar yaw; tf2Scalar T[3]; };
 	boost::circular_buffer<SimplePose_> poseQ_;
-	static constexpr size_t kPoseQSize = 15; // same as the frame rate
+	static constexpr size_t kPoseQSize = 7; // same as the frame rate
 	bool _havePoseAvg = false;
 	tf2Scalar _rel_yaw_ave, _rel_yaw_var, _rel_x_ave, _rel_x_var, _rel_y_ave, _rel_y_var;
 
