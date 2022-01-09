@@ -34,7 +34,7 @@ def main():
 
     # Follow https://gregorkovalcik.github.io/opencv_contrib/tutorial_aruco_board_detection.html
     # See https://docs.opencv.org/4.5.3/dc/df7/dictionary_8hpp.html
-    dict = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_4X4_50) # or just 0
+    dict = cv.aruco.getPredefinedDictionary(cv.aruco.DICT_4X4_250)
     board = cv.aruco.GridBoard_create(M, N, len, gap, dict, offset)
     dim = (int(1024 * (M*len + (M+1)*gap)), int(1024 * (N*len + (N+1)*gap)))
     img = board.draw(dim, marginSize=margin, borderBits=1)

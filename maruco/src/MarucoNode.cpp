@@ -179,7 +179,7 @@ Maruco::Maruco()
 	_cam2marker_sub.subscribe(_ph, "cam2marker", 10);
   	// _tf2_filter.registerCallback(boost::bind(&Self::onCam2Marker, this, _1));
   
-  	auto dict = aruco::getPredefinedDictionary(aruco::DICT_4X4_50);
+  	auto dict = aruco::getPredefinedDictionary(aruco::DICT_4X4_250);
 	vector<int> ids;
 	for (auto i=0; i < 2*(6+8); ++i) {
 		ids.push_back(i);
@@ -189,7 +189,6 @@ Maruco::Maruco()
 	vector<vector<cv::Point3f>> corners;
 	//front
 	corners.push_back({Point3f(	+0.254,		-0.14	,	+0.375)// top row
-
 					, Point3f(	+0.086,		-0.14	,	+0.375)
 					, Point3f(	+0.086,		-0.05	,	+0.375)
 					, Point3f(	+0.254,		-0.05	,	+0.375)});

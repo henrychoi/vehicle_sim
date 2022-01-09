@@ -213,7 +213,7 @@ Visualization Manager:
         base_footprint:
           Value: false
         base_link:
-          Value: true
+          Value: false
         hitch_center:
           Value: false
         kingpin:
@@ -441,4 +441,4 @@ Window Geometry:
     collapsed: true
   Width: 1406
   X: 933
-  Y: 637
+  Y: 600

@@ -5,8 +5,8 @@
 
   <xacro:macro name="monocular_camera_macro"
     params="prefix parent x y z roll pitch yaw fps width height fov">
-    <xacro:property name="len" value="0.001" />
-    <xacro:property name="mass" value="0.010" />
+    <xacro:property name="len" value="0.01" />
+    <xacro:property name="mass" value="0.050" />
 
     <joint name="${prefix}_joint" type="fixed">
       <origin rpy="${roll} ${pitch} ${yaw}" xyz="${x} ${y} ${z}"/>
