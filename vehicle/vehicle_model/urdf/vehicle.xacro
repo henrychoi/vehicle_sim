@@ -62,15 +62,15 @@
       roll="${calibration['base_link2quad']['roll']}"
       pitch="${calibration['base_link2quad']['pitch']}"
       yaw="${calibration['base_link2quad']['yaw']}"
-      fps="15" width="1280" height="720" fov="1.6"/>
+      fps="6" width="1280" height="720" fov="1.6"/>
 
-  <xacro:monocular_camera_macro prefix="up" parent="base_link"
+  <xacro:monocular_camera_macro prefix="webcam" parent="base_link"
       x="${calibration['base_link2camera']['x']}"
       y="${calibration['base_link2camera']['y']}"
       z="${calibration['base_link2camera']['z']}"
       roll="${calibration['base_link2camera']['roll']}"
       pitch="${calibration['base_link2camera']['pitch']}"
       yaw="${calibration['base_link2camera']['yaw']}"
-      fps="15" width="640" height="480" fov="2.0"/>
+      fps="15" width="640" height="480" fov="1.523"/> <!--H: 87.26 V: 64.96-->
 
 </robot>
