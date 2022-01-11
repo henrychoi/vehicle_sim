@@ -378,7 +378,7 @@ void Aruco::onQuadFrame(const sensor_msgs::ImageConstPtr& msg) {
 				, tvec[0], tvec[1], tvec[2], rvec[0], rvec[1], rvec[2]);
 
 		if (msg->header.stamp - _marker2MonoTime <= _mark2MonoTimeout) {
-			ROS_INFO_THROTTLE(1,
+			ROS_DEBUG_THROTTLE(1,
 				"webcam based estimate is current; skipping backup localization estimate");
 			return;
 		}

@@ -30,9 +30,6 @@
 using namespace std;
 using namespace hcpath;
 
-#define random(lower, upper) (rand() * (upper - lower) / RAND_MAX + lower)
-
-
 class HcPathNode {
 	typedef HcPathNode Self;
 	enum class ParkingState: uint32_t { unsafe = 0x1, stopped = 0x2
@@ -78,15 +75,14 @@ class HcPathNode {
 				continue;
 			}
 			// If going backward, check collision
-			if (dist2trailer(point.x, point.y, point.theta, sqrt(_rel_yaw_var))
-				< _safe_distance) {
+			if (dist2trailer(point.x, point.y, point.theta) < _safe_distance) {
 				return false;
 			}
 		}
 		return true;
 	}
 
-	float dist2trailer(float x, float y, float yaw, float sigma_yaw) {
+	float dist2trailer(float x, float y, float yaw) {
 		static constexpr float kLegBase = 0.56f, kLegWidth = 0.44f, kLegRadius = 0.02f;
 		static constexpr c2AABB kLegAABB[4] = { // legs are modeled as tall boxes
 			{ { 0.5f*kLegBase - kLegRadius,  0.5f*kLegWidth - kLegRadius} // leg1
@@ -104,20 +100,17 @@ class HcPathNode {
 		// TODO: consider varying x and y
 		c2x xform;
 		xform.p.x = x; xform.p.y = y;
-		for (auto i=-3; i <=3; i += 3) {
-			auto yaw = _rel_yaw_ave + i*sigma_yaw;	
-			xform.r.c = cos(yaw); xform.r.s = sin(yaw);
-			for (unsigned l=0; l < sizeof(kLegAABB)/sizeof(kLegAABB[0]); ++l) {
-				auto dist = c2GJK(&kLegAABB[l], C2_TYPE_AABB, NULL
-								, &_footprintPoly, C2_TYPE_POLY, &xform
-								, NULL, NULL, true, NULL, &_gjkCache[l]);
-				if (dist <= 0) { // collision!
-					ROS_DEBUG("collision against leg %u at yaw %.2f", l, yaw);
-				} else {
-					ROS_DEBUG("distance %.2f to leg %u at yaw %.2f", dist, l, yaw);
-				}
-				minDist = min(minDist, dist);
+		xform.r.c = cos(yaw); xform.r.s = sin(yaw);
+		for (unsigned l=0; l < sizeof(kLegAABB)/sizeof(kLegAABB[0]); ++l) {
+			auto dist = c2GJK(&kLegAABB[l], C2_TYPE_AABB, NULL
+							, &_footprintPoly, C2_TYPE_POLY, &xform
+							, NULL, NULL, true, NULL, &_gjkCache[l]);
+			if (dist <= 0) { // collision!
+				ROS_DEBUG("collision against leg %u at yaw %.2f", l, yaw);
+			} else {
+				ROS_DEBUG("distance %.2f to leg %u at yaw %.2f", dist, l, yaw);
 			}
+			minDist = min(minDist, dist);
 		}
 		return minDist;
 	}
@@ -176,12 +169,8 @@ class HcPathNode {
 	c2GJKCache _gjkCache[4] = { {.count=0}, {.count=0}, {.count=0}, {.count=0} };
 	float _dist2Trailer = numeric_limits<float>::max();
 
-
-	struct SimplePose_ { complex<tf2Scalar> heading; tf2Scalar yaw; tf2Scalar T[3]; };
-	boost::circular_buffer<SimplePose_> poseQ_;
-	static constexpr size_t kPoseQSize = 7; // same as the frame rate
-	bool _havePoseAvg = false;
-	tf2Scalar _rel_yaw_ave, _rel_yaw_var, _rel_x_ave, _rel_x_var, _rel_y_ave, _rel_y_var;
+	struct SimplePose_ { complex<tf2Scalar> heading; tf2Scalar yaw; tf2Scalar T[3]; }
+		_2Dpose;
 
 	// filter parameters
 	Motion_Noise motion_noise_;
@@ -230,7 +219,6 @@ HcPathNode::HcPathNode()
 , as_(_nh, "/path" //, boost::bind(&Self::onRequest, this, _1)
 	, false)// THIS SHOULD ALWAYS BE SET TO FALSE TO AVOID RACE CONDITIONS
 , tf2_listener_(tf2_buffer_)
-, poseQ_(kPoseQSize)
 {
 	_actual_path.header.frame_id = "trailer";
 	int fps;
@@ -357,87 +345,49 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 		tf2::fromMsg(xform.transform.rotation, Q);
 		tf2::Vector3 axis = Q.getAxis();
 		tf2Scalar angle = Q.getAngle() * (1 - 2*signbit(axis[2]));// Account for the axis sign
-		SimplePose_ pose = { // assume the received pose is roughly vertical
+		_2Dpose = { // assume the received pose is roughly vertical
 			.heading = polar(1., angle), .yaw = angle 
 			, .T = { xform.transform.translation.x
 					, xform.transform.translation.y
 					, xform.transform.translation.z }
 		};
 		ROS_DEBUG("trailer -> base_link = [%.2f, %.2f; %.2f, %.2f]"
-				, pose.T[0], pose.T[1], axis[2], pose.yaw);
-		poseQ_.push_back(pose);
+				, _2Dpose.T[0], _2Dpose.T[1], axis[2], _2Dpose.yaw);
 	} catch (tf2::TransformException &ex) {
 		ROS_ERROR("onTfStrobe trailer --> base_link failed; reason: %s", ex.what());
-		_havePoseAvg = false;
 		return; // all history should be valid for stat  to be valid
 	}
 
-	if (poseQ_.full()) {
-		double x_sum = 0, x2_sum = 0, y_sum = 0, y2_sum = 0;
-		complex<tf2Scalar> heading_sum;
-		for (auto pose: poseQ_) {
-			x_sum += pose.T[0]; x2_sum += pose.T[0] * pose.T[0];
-			y_sum += pose.T[1]; y2_sum += pose.T[1] * pose.T[1];
-			heading_sum += pose.heading;
-		}
+	_tfTimeout = t0 + _tfWatchdogPeriod;
 
-		static constexpr double kPoseAveWeight = (1.0/kPoseQSize);
-		tf2Scalar
-			yaw_ave = arg(heading_sum)//NOTE: no need to divide because of vector arithmetic
-			, yaw_var = 0
-			, x_ave = kPoseAveWeight * x_sum, x_var = kPoseAveWeight * x2_sum - x_ave*x_ave
-			, y_ave = kPoseAveWeight * y_sum, y_var = kPoseAveWeight * y2_sum - y_ave*y_ave
-			;
-		for (auto pose: poseQ_) {
-			auto d = pify(yaw_ave - pose.yaw);
-			yaw_var += d*d;
-		}
-		// ROS_DEBUG("yaw stat [%.1f, %.2f, %.2f+-sqrt(%.2e)]"
-		// 		, abs(heading_sum), arg(heading_sum), yaw_ave, yaw_var);
-		yaw_var *= kPoseAveWeight;
-
-		ROS_DEBUG("pose stat [%.2f+-%.2e, %.2f+-%.2e, %.2f+-%.2e]"
-				,  x_ave, x_var,  y_ave, y_var,  yaw_ave, yaw_var);
-
-		// store the current base_link pose (relative to the middle of the trailer)
-		_rel_yaw_ave = yaw_ave; _rel_x_ave = x_ave; _rel_y_ave = y_ave; 
-		_rel_yaw_var = yaw_var; _rel_x_var = x_var; _rel_y_var = y_var;
-		_havePoseAvg = true;
-		_tfTimeout = t0 + _tfWatchdogPeriod;
-
-		if (_pathSign && inParkingState(ParkingState::stopped)) {
-			// check if car has arrived at the goal
-			// TODO: replace with contact sensor
-			double e_x = (_pathSign > 0
-							? _xform2kingpin.transform.translation.x
-							: _xform2hitch.transform.translation.x)
-						- _rel_x_ave
-				, e_y = _rel_y_ave
-				, e_t = M_PI * signbit(_pathSign) - _rel_yaw_ave;
-			ROS_WARN("Docking to %d, error %.2f, %.2f, %.2f", _pathSign, e_x, e_y, e_t);
-			static constexpr double kEpsilon = 0.01, kEpsilonSq = kEpsilon * kEpsilon;
-			if (e_t*e_t < max(_rel_yaw_var, kEpsilonSq)
-				&& e_y*e_y < max(_rel_y_var, kEpsilonSq)) {
-				ROS_ERROR("Docked successfully!");
-				_parkingState = ParkingState::idle;
-				_pathSign = 0;
-			} else { // try to park (again)
-				ROS_ERROR("Trying to dock");
-				if (heuristic_plan()) {
-					_gear = 0; // put into N to get going
-				} else {
-					_gear = -128; // non-recoverable failure
-				}
+	if (_pathSign && inParkingState(ParkingState::stopped)) {
+		// check if car has arrived at the goal
+		// TODO: replace with contact sensor
+		double e_x = (_pathSign > 0
+						? _xform2kingpin.transform.translation.x
+						: _xform2hitch.transform.translation.x)
+					- _2Dpose.T[0]
+			, e_y = _2Dpose.T[1]
+			, e_t = M_PI * signbit(_pathSign) - _2Dpose.yaw;
+		ROS_WARN("Docking to %d, error %.2f, %.2f, %.2f", _pathSign, e_x, e_y, e_t);
+		static constexpr double kEpsilon = 0.01, kEpsilonSq = kEpsilon * kEpsilon;
+		if (e_t*e_t < kEpsilonSq && e_y*e_y < kEpsilonSq) {
+			ROS_ERROR("Docked successfully!");
+			_parkingState = ParkingState::idle;
+			_pathSign = 0;
+		} else { // try to park (again)
+			ROS_ERROR("Trying to dock");
+			if (heuristic_plan()) {
+				_gear = 0; // put into N to get going
+			} else {
+				_gear = -128; // non-recoverable failure
 			}
-		} else if(abs(_gear) == 1) {// check for collision while driving (in gear)
-			_dist2Trailer = dist2trailer(static_cast<float>(_rel_x_ave)
-					, static_cast<float>(_rel_y_ave), _rel_yaw_ave, sqrt(_rel_yaw_var));
-			auto elapsed = ros::Time::now() - t0;
-			// ROS_DEBUG_THROTTLE(1, "collision checking took %u ns", elapsed.nsec);
 		}
-	} else {
-		_havePoseAvg = false;
-		return;
+	} else if(abs(_gear) == 1) {// check for collision while driving (in gear)
+		_dist2Trailer = dist2trailer(static_cast<float>(_2Dpose.T[0])
+				, static_cast<float>(_2Dpose.T[1]), _2Dpose.yaw);
+		auto elapsed = ros::Time::now() - t0;
+		// ROS_DEBUG_THROTTLE(1, "collision checking took %u ns", elapsed.nsec);
 	}
 }
 
@@ -471,12 +421,12 @@ bool HcPathNode::heuristic_plan() {
 		// , .kappa = 0
 		, .d = -1 // this demo just backs up to both kingpin and hitch
 	} , start = { // path planner pose is always relative to the trailer
-		.x = _rel_x_ave, .y = _rel_y_ave, .theta = _rel_yaw_ave
+		.x = _2Dpose.T[0], .y = _2Dpose.T[1], .theta = _2Dpose.yaw
 		, .kappa = _curvature // the current curvature
 		, .d = -1 // assume we are in R for the demo
 	};
 
-	auto lateralDir = 1 - 2*signbit(_rel_y_ave);
+	auto lateralDir = 1 - 2*signbit(_2Dpose.T[1]);
 	static constexpr double kFallbackDistanceWheelbaseFactor = 3;
 	if(inParkingState(ParkingState::approaching)) { // recover from collision risk
 		start.d = goal.d = 1; // go forward when recovering
@@ -496,12 +446,12 @@ bool HcPathNode::heuristic_plan() {
 		double angleFromTarget;
 		if (_pathSign > 0) { // dock to the front
 			goal.x = _xform2kingpin.transform.translation.x
-					+ abs(_rel_y_ave) + abs(pify(goal.theta - _rel_yaw_ave)) * _wheel_base;
+					+ abs(_2Dpose.T[1]) + abs(pify(goal.theta - _2Dpose.yaw)) * _wheel_base;
 			angleFromTarget = abs(atan2(start.y
 									, start.x - _xform2kingpin.transform.translation.x));
 		} else {
 			goal.x = _xform2hitch.transform.translation.x
-					- (abs(_rel_y_ave) + abs(pify(goal.theta - _rel_yaw_ave)) * _wheel_base);
+					- (abs(_2Dpose.T[1]) + abs(pify(goal.theta - _2Dpose.yaw)) * _wheel_base);
 			angleFromTarget = abs(atan2(start.y
 									, _xform2hitch.transform.translation.x - start.x));
 		}
@@ -634,7 +584,7 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 
 	double throttle = 0, curvature = 0;
 
-	if (!_havePoseAvg || now > _tfTimeout) {
+	if (now > _tfTimeout) {
 		ROS_ERROR_THROTTLE(1, "No pose estimate watchdog; no vehicle control");	
 		_gear = 0;
 	}
@@ -694,7 +644,7 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 		ROS_INFO_THROTTLE(0.5, // "dl %.3g, dr %.3g, sl %.3g, sr %.3g "
 				"^[%.2f, %.2f, %.2f] vs truth (%.2f, %.2f, %.2f)"
 				// , dl, dr, sl, sr
-				, _rel_x_ave, _rel_y_ave, _rel_yaw_ave
+				, _2Dpose.T[0], _2Dpose.T[1], _2Dpose.yaw
 				, _trueFootprintPose[0], _trueFootprintPose[1], _trueFootprintPose[2]);
 	} else {
 		ROS_DEBUG_THROTTLE(0.2, "Gear %d, throttle %.2f, curvature %.2f vs. actual %.2f"
@@ -767,15 +717,15 @@ void HcPathNode::control(double& throttle, double& curvature) {
 			throttle = _Kforward_s * (ctrl.delta_s - ds); // feed-forward throttle
 		} // end feed-forward
 
-		auto ex1 = first.x - _rel_x_ave, ey1 = first.y - _rel_y_ave
+		auto ex1 = first.x - _2Dpose.T[0], ey1 = first.y - _2Dpose.T[1]
 			, dist1sq = ex1*ex1 + ey1*ey1
 			, phi_error = atan2(ey1, ex1) // [-pi, pi]
-			, theta_e = pify(phi_error - _rel_yaw_ave)
+			, theta_e = pify(phi_error - _2Dpose.yaw)
 			, cos1 = cos(theta_e)
 			;
 		if (dist1sq < kEpsilonSq) {
 			ROS_INFO("^[%.2f, %.2f] reached waypoint 1 (%.2f, %.2f, %.2f); pruning 1"
-					, _rel_x_ave, _rel_y_ave, first.x, first.y, first.theta);
+					, _2Dpose.T[0], _2Dpose.T[1], first.x, first.y, first.theta);
 			_openStateQ.pop_front();
 			continue;
 		}
@@ -785,7 +735,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 			// waypoint NOT in front of the car
 			ROS_WARN("(%.2f, %.2f) ds %.2f "
 					"(%.3f m, %.2f rad); Pruning way (%.2f, %.2f)"//", %.2f, %.0f"
-					, _trueFootprintPose[0], _trueFootprintPose[1]//, _rel_x_ave, _rel_y_ave
+					, _trueFootprintPose[0], _trueFootprintPose[1]//, _2Dpose.T[0], _2Dpose.T[1]
 					, ds, first.d * dist1, theta_e
 					, first.x, first.y // , first.theta, first.d
 					);
@@ -795,7 +745,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 
 		if (_openStateQ.size() > 1) { // prune waypoints that are behind me already
 			const auto& second = _openStateQ[1];
-			auto ex2 = second.x - _rel_x_ave, ey2 = second.y - _rel_y_ave
+			auto ex2 = second.x - _2Dpose.T[0], ey2 = second.y - _2Dpose.T[1]
 				, dist2sq = ex2*ex2 + ey2*ey2;
 			if (dist2sq < kEpsilonSq) {
 				ROS_WARN("Reached waypoint 2 (%.2f, %.2f, %.2f); pruning 2"
@@ -806,7 +756,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 
 			auto dot = ex1 * ex2 + ey1 * ey2;//to normalize, / sqrt(dist1sq)*sqrt(dist2sq)
 			ROS_DEBUG("^[%.2f, %.2f, %.2f] (%.2g, %.2g).(%.2g, %.2g)"
-					, _rel_x_ave, _rel_y_ave, _rel_yaw_ave, ex1, ey1, ex2, ey2);
+					, _2Dpose.T[0], _2Dpose.T[1], _2Dpose.yaw, ex1, ey1, ex2, ey2);
 			if (dot < sqrt(dist1sq * dist2sq) * kCos30Deg) {
 				_openStateQ.pop_front();
 				ROS_INFO("Prune past waypoint");
@@ -818,34 +768,34 @@ void HcPathNode::control(double& throttle, double& curvature) {
 		eAxial = dist1 * cos1; // signed, depending on whether front/back waypoint
 		eLateral = dist1 * sin(theta_e);
 		eKappa = first.kappa - _curvature;
-		eHeading = pify(first.theta - _rel_yaw_ave);
+		eHeading = pify(first.theta - _2Dpose.yaw);
 		throttle += _Kback_axial * eAxial + _Kback_intaxial * _eKappaInt;
 		_eAxialInt = clamp(_eAxialInt + eAxial, -kMaxThrottle, +kMaxThrottle);
 		ROS_INFO_THROTTLE(0.25
 				, "(%.2f, %.2f) gear %d, ds %.2f error %.2f = %.2f; %.2f, %.2f, %.2f = %.2f"
-				, _trueFootprintPose[0], _trueFootprintPose[1]//, _rel_x_ave, _rel_y_ave
+				, _trueFootprintPose[0], _trueFootprintPose[1]//, _2Dpose.T[0], _2Dpose.T[1]
 				, _gear, ds, eAxial, throttle
 				, eLateral, eHeading, eKappa, curvature);
 		// visualize actual path
 		if (_actual_path.poses.size()) {
 			const auto& last = _actual_path.poses.back();
-			auto dx = _rel_x_ave - last.pose.position.x
-				, dy = _rel_y_ave - last.pose.position.y;
+			auto dx = _2Dpose.T[0] - last.pose.position.x
+				, dy = _2Dpose.T[1] - last.pose.position.y;
 			if ((dx*dx + dy*dy) > kPathRes*kPathRes) {
 				geometry_msgs::PoseStamped pose;
-				pose.pose.position.x = _rel_x_ave;
-				pose.pose.position.y = _rel_y_ave;
-				pose.pose.orientation.z = sin(0.5 * _rel_yaw_ave);
-				pose.pose.orientation.w = cos(0.5 * _rel_yaw_ave);
+				pose.pose.position.x = _2Dpose.T[0];
+				pose.pose.position.y = _2Dpose.T[1];
+				pose.pose.orientation.z = sin(0.5 * _2Dpose.yaw);
+				pose.pose.orientation.w = cos(0.5 * _2Dpose.yaw);
 				_actual_path.poses.push_back(pose);
 				_path_pub.publish(_actual_path);
 			}
 		} else {
 			geometry_msgs::PoseStamped pose;
-			pose.pose.position.x = _rel_x_ave;
-			pose.pose.position.y = _rel_y_ave;
-			pose.pose.orientation.z = sin(0.5 * _rel_yaw_ave);
-			pose.pose.orientation.w = cos(0.5 * _rel_yaw_ave);
+			pose.pose.position.x = _2Dpose.T[0];
+			pose.pose.position.y = _2Dpose.T[1];
+			pose.pose.orientation.z = sin(0.5 * _2Dpose.yaw);
+			pose.pose.orientation.w = cos(0.5 * _2Dpose.yaw);
 			_actual_path.poses.push_back(pose);
 		}
 
