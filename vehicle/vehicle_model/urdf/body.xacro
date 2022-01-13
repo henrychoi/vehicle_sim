@@ -18,7 +18,7 @@
       <visual>
         <origin xyz="0.025 -0.01 -0.085" rpy="1.570796 0 1.5707963"/>
         <geometry>
-          <mesh filename="package://vehicle_model/mesh/car_sidehitch.dae" scale="1 1 1"/>
+          <mesh filename="package://vehicle_model/mesh/car_fifthwheel.dae" scale="1 1 1"/>
         </geometry>
         <material name="black">
             <color rgba="${25/255} ${25/255} ${25/255} .9"/>
@@ -31,6 +31,110 @@
         </geometry>
       </collision>
     </link>
+
+    <joint name="${suffix}_kingpin_joint1" type="fixed">
+      <parent link="${parent}"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <child  link="${suffix}_kingpin1"/>
+    </joint>  
+    <link name="${suffix}_kingpin1">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.01"/>
+        <inertia ixx="0.1" ixy="0.0" ixz="0.0" 
+                 iyy="0.1" iyz="0.0" 
+                 izz="0.1"/>
+      </inertial>
+      <visual>
+        <origin xyz="0.125 0 0.145" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.024 0.024 0.024"/>
+        </geometry>
+        <material name="black">
+            <color rgba="${25/255} ${25/255} ${25/255} .9"/>
+        </material>
+      </visual>
+      <collision name="kingpin_collision">
+        <origin xyz="0.125 0 0.145" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.024 0.024 0.024"/>
+        </geometry>
+      </collision>
+
+    <sensor name='kingpin_sensor' type='contact'>
+        <always_on>1</always_on>
+        <contact>
+          <collision>kingpin_collision</collision>
+          <topic>__default_topic__</topic>
+        </contact>
+        <plugin name='contact_sensor_plugin' filename='libgazebo_ros_bumper.so'>
+          <bumperTopicName>kingpin_contact</bumperTopicName>
+          <frameName>kingpin</frameName>
+        </plugin>
+        <pose frame=''>0 0 0.4075 0 -0 0</pose>
+      </sensor>
+
+    </link>
+    <joint name="${suffix}_kingpin_joint2" type="fixed">
+      <parent link="${parent}"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <child  link="${suffix}_kingpin2"/>
+    </joint>  
+    <link name="${suffix}_kingpin2">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.01"/>
+        <inertia ixx="0.1" ixy="0.0" ixz="0.0" 
+                 iyy="0.1" iyz="0.0" 
+                 izz="0.1"/>
+      </inertial>
+      <visual>
+        <origin xyz="0.09 -0.022 0.145" rpy="0 0 0.2617994"/>
+        <geometry>
+          <box size="0.05 0.01 0.024"/>
+        </geometry>
+        <material name="black">
+            <color rgba="${25/255} ${25/255} ${25/255} .9"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0.09 -0.022 0.145" rpy="0 0 0.2617994"/>
+        <geometry>
+          <box size="0.05 0.01 0.024"/>
+        </geometry>
+      </collision>
+    </link>
+    <joint name="${suffix}_kingpin_joint3" type="fixed">
+      <parent link="${parent}"/>
+      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <child  link="${suffix}_kingpin3"/>
+    </joint>  
+    <link name="${suffix}_kingpin3">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.01"/>
+        <inertia ixx="0.1" ixy="0.0" ixz="0.0" 
+                 iyy="0.1" iyz="0.0" 
+                 izz="0.1"/>
+      </inertial>
+      <visual>
+        <origin xyz="0.09 0.022 0.145" rpy="0 0 -0.2617994"/>
+        <geometry>
+          <box size="0.05 0.01 0.024"/>
+        </geometry>
+        <material name="black">
+            <color rgba="${25/255} ${25/255} ${25/255} .9"/>
+        </material>
+      </visual>
+      <collision>
+        <origin xyz="0.09 0.022 0.145" rpy="0 0 -0.2617994"/>
+        <geometry>
+          <box size="0.05 0.01 0.024"/>
+        </geometry>
+      </collision>
+    </link>
+
+
     <light name='under' type='directional'>
       <cast_shadows>1</cast_shadows>
       <pose relative_to="base_link">0 0 0  0 0 0</pose>
