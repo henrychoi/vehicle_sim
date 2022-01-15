@@ -425,7 +425,7 @@ void Aruco::onQuadFrame(const sensor_msgs::ImageConstPtr& msg) {
 		xf.transform.rotation.z = sin(0.5 * yaw); //Qave.z();
 		xf.transform.rotation.w = cos(0.5 * yaw); //Qave.w();
 		_br.sendTransform(xf);
-		ROS_INFO_THROTTLE(1, //"%d.%03u "
+		ROS_DEBUG_THROTTLE(1, //"%d.%03u "
 			"trailer <-- quad2_link = [%.2f, %.2f; (%.2f, %.2f, %.2f), %.2f]"
 			//, xf.header.stamp.sec, xf.header.stamp.nsec/1000000
 			, xf.transform.translation.x, xf.transform.translation.y
@@ -555,7 +555,7 @@ void Aruco::onMonoFrame(const sensor_msgs::ImageConstPtr& msg) {
 		float sina2 = sin(0.5f * angle);
 		float scale = sina2 / angle;
 
-		ROS_INFO_THROTTLE(1,
+		ROS_DEBUG_THROTTLE(1,
 				"markers (%s) in webcam; T = [%.2f, %.2f, %.2f] R = [%.2f, %.2f, %.2f]"
 				, markerIdStr.c_str()
 				, tvec[0], tvec[1], tvec[2], rvec[0], rvec[1], rvec[2]);
@@ -609,7 +609,7 @@ void Aruco::onMonoFrame(const sensor_msgs::ImageConstPtr& msg) {
 			tf2_buffer_.transform(cam2marker, base2marker, "base_link");
 			tf2::Quaternion Q;
 			tf2::fromMsg(base2marker.pose.orientation, Q);
-			ROS_INFO_THROTTLE(1, //"%d.%03u "
+			ROS_DEBUG_THROTTLE(1, //"%d.%03u "
 				"trailer [%.3f, %.3f; %.2f, %.2f, %.2f, %.2f] in base_link (webcam)"
 				//, base2marker.header.stamp.sec, base2marker.header.stamp.nsec/1000000
 				, base2marker.pose.position.x, base2marker.pose.position.y

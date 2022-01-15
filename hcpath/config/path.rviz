@@ -147,6 +147,47 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
+        quad0_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        quad0_optical_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        quad1_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        quad1_optical_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        quad2_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        quad2_optical_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        quad3_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
+        quad3_optical_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+        quad_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
         steering_front_link:
           Alpha: 1
           Show Axes: false
@@ -224,6 +265,24 @@ Visualization Manager:
           Value: false
         kingpin:
           Value: false
+        quad0_link:
+          Value: false
+        quad0_optical_link:
+          Value: false
+        quad1_link:
+          Value: false
+        quad1_optical_link:
+          Value: false
+        quad2_link:
+          Value: false
+        quad2_optical_link:
+          Value: false
+        quad3_link:
+          Value: false
+        quad3_optical_link:
+          Value: false
+        quad_link:
+          Value: false
         steering_front_link:
           Value: false
         steering_left_front_link:
@@ -267,6 +326,24 @@ Visualization Manager:
           base_R_skirt:
             {}
           base_link:
+            quad_link:
+              quad0_link:
+                quad0_optical_link:
+                  {}
+              quad1_link:
+                quad1_optical_link:
+                  {}
+              quad2_link:
+                quad2_optical_link:
+                  {}
+              quad3_link:
+                quad3_optical_link:
+                  {}
+              trailer:
+                hitch_center:
+                  {}
+                kingpin:
+                  {}
             steering_front_link:
               steering_left_front_link:
                 wheel_left_front_link:
@@ -274,11 +351,6 @@ Visualization Manager:
               steering_right_front_link:
                 wheel_right_front_link:
                   {}
-            trailer:
-              hitch_center:
-                {}
-              kingpin:
-                {}
             webcam_link:
               webcam_optical_link:
                 {}
@@ -421,4 +493,4 @@ Window Geometry:
     collapsed: true
   Width: 1406
   X: 1376
-  Y: 632
+  Y: 595

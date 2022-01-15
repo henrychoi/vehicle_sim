@@ -221,10 +221,7 @@ HcPathNode::HcPathNode()
 , tf2_listener_(tf2_buffer_)
 {
 	_actual_path.header.frame_id = "trailer";
-	int fps;
-	_nh.param("fps", fps, 15);
-	assert(fps > 5);
-	_tfWatchdogPeriod = ros::Duration(2.5 / fps);
+	_tfWatchdogPeriod = ros::Duration(0.3);
 
 	_nh.param("deadman_btn", _deadman_btn, 4);
 
@@ -324,7 +321,7 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 			_xform2kingpin = tf2_buffer_.lookupTransform("trailer", "kingpin", ros::Time(0));
 			_haveXform2kingpin = true;
 		} catch (tf2::TransformException &ex) {
-			ROS_DEBUG("onTfStrobe trailer --> kinpin failed; reason: %s", ex.what());
+			ROS_ERROR("onTfStrobe trailer --> kinpin failed; reason: %s", ex.what());
 		}
 	}
 	if (!_haveXform2hitch) {
@@ -332,7 +329,7 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 			_xform2hitch = tf2_buffer_.lookupTransform("trailer", "hitch_center", ros::Time(0));
 			_haveXform2hitch = true;
 		} catch (tf2::TransformException &ex) {
-			ROS_DEBUG("onTfStrobe trailer --> hitch_center failed; reason: %s", ex.what());
+			ROS_ERROR("onTfStrobe trailer --> hitch_center failed; reason: %s", ex.what());
 		}
 	}
 
@@ -351,7 +348,7 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 					, xform.transform.translation.y
 					, xform.transform.translation.z }
 		};
-		ROS_DEBUG("trailer -> base_link = [%.2f, %.2f; %.2f, %.2f]"
+		ROS_DEBUG_THROTTLE(1, "trailer -> base_link = [%.2f, %.2f; %.2f, %.2f]"
 				, _2Dpose.T[0], _2Dpose.T[1], axis[2], _2Dpose.yaw);
 	} catch (tf2::TransformException &ex) {
 		ROS_ERROR("onTfStrobe trailer --> base_link failed; reason: %s", ex.what());

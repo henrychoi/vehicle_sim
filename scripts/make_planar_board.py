@@ -18,7 +18,7 @@ def main():
         "--margin minimum margin in the output image [pixel]\n" + \
         "--offset The marker number to start the pattern at\n" + \
         "\nexample argument:\n" + \
-        "--length 0.1 --gap 0.005 -N 8 -M 1 --offset 28 -o worlds/gazebo_world_description/materials/textures/bottom_marker.jpg"
+        "--length 0.1 --gap 0.005 -N 12 -M 16 --offset 28 -o worlds/gazebo_world_description/materials/textures/bottom_marker.jpg"
     options, remainder = getopt.getopt(sys.argv[1:], 'o:N:M:v',
         ['output=', 'rows=', 'columns=', 'length=', 'gap=', 'offset=', 'verbose'])
     for opt, arg in options:

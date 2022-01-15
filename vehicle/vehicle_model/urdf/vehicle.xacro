@@ -55,14 +55,14 @@
   <!-- ================ sensor to base_link xforms ================ -->
 	<xacro:property name="calibration" value="${load_yaml('$(find vehicle_model)/config/calibration.yaml')}"/>
 
-  <!-- xacro:quad_camera_macro parent="base_link"
+  <xacro:quad_camera_macro parent="base_link"
       x="${calibration['base_link2quad']['x']}"
       y="${calibration['base_link2quad']['y']}"
       z="${calibration['base_link2quad']['z']}"
       roll="${calibration['base_link2quad']['roll']}"
       pitch="${calibration['base_link2quad']['pitch']}"
       yaw="${calibration['base_link2quad']['yaw']}"
-      fps="6" width="1280" height="720" fov="1.6"/-->
+      fps="6" width="1280" height="720" fov="1.6"/>
 
   <xacro:monocular_camera_macro prefix="webcam" parent="base_link"
       x="${calibration['base_link2camera']['x']}"
