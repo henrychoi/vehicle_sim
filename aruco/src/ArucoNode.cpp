@@ -160,7 +160,7 @@ Aruco::Aruco()
   
   	auto dict = aruco::getPredefinedDictionary(aruco::DICT_4X4_250);
 	vector<int> ids;
-	for (auto i=0; i < 2*(6+8); ++i) {
+	for (auto i=0; i < 2*(6+8) + 16*12; ++i) { // 4 sides + bottom
 		ids.push_back(i);
 	}
 
@@ -282,6 +282,7 @@ Aruco::Aruco()
 					, Point3f(	-0.255,		+0.05	,	-0.374	)
 					, Point3f(	-0.255,		+0.14	,	-0.374	)
 					, Point3f(	-0.255,		+0.14	,	-0.1885)});
+#include "bottom_markers.cpp"
 	assert(ids.size() == corners.size());	
 
 	_board = aruco::Board::create(InputArrayOfArrays(corners), dict, InputArray(ids));
@@ -554,7 +555,7 @@ void Aruco::onMonoFrame(const sensor_msgs::ImageConstPtr& msg) {
 		float sina2 = sin(0.5f * angle);
 		float scale = sina2 / angle;
 
-		ROS_DEBUG_THROTTLE(1,
+		ROS_INFO_THROTTLE(1,
 				"markers (%s) in webcam; T = [%.2f, %.2f, %.2f] R = [%.2f, %.2f, %.2f]"
 				, markerIdStr.c_str()
 				, tvec[0], tvec[1], tvec[2], rvec[0], rvec[1], rvec[2]);
@@ -585,7 +586,7 @@ void Aruco::onMonoFrame(const sensor_msgs::ImageConstPtr& msg) {
 		_marker2MonoTime = msg->header.stamp;
 
 		ROS_INFO_THROTTLE(1, //"%d.%03u "
-			"trailer <-- quad_link = [%.2f, %.2f; (%.2f, %.2f, %.2f), %.2f]"
+			"trailer <-- base_link = [%.2f, %.2f; (%.2f, %.2f, %.2f), %.2f]"
 			//, xf.header.stamp.sec, xf.header.stamp.nsec/1000000
 			, xf.transform.translation.x, xf.transform.translation.y
 			, axis[0], axis[1], axis[2], yaw);
@@ -608,8 +609,8 @@ void Aruco::onMonoFrame(const sensor_msgs::ImageConstPtr& msg) {
 			tf2_buffer_.transform(cam2marker, base2marker, "base_link");
 			tf2::Quaternion Q;
 			tf2::fromMsg(base2marker.pose.orientation, Q);
-			ROS_DEBUG_THROTTLE(1, //"%d.%03u "
-				"webcam [%.3f, %.3f; %.2f, %.2f, %.2f, %.2f] in base_link"
+			ROS_INFO_THROTTLE(1, //"%d.%03u "
+				"trailer [%.3f, %.3f; %.2f, %.2f, %.2f, %.2f] in base_link (webcam)"
 				//, base2marker.header.stamp.sec, base2marker.header.stamp.nsec/1000000
 				, base2marker.pose.position.x, base2marker.pose.position.y
 				, base2marker.pose.orientation.x

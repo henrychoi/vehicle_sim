@@ -76,7 +76,7 @@
           <name>trailer</name>
           <static>true</static>
           <use_model_frame>true</use_model_frame>
-          <xyz>0 0 -4</xyz>
+          <xyz>0 0 -3</xyz>
         </track_visual>
       </camera>
     </gui-->
@@ -325,7 +325,7 @@
         <parent>trailer</parent>
       </joint>
       <link name='aruco_bottom'>
-        <pose>0 0 -0.2 0 -3.14159 0</pose>
+        <pose>0 0 -0.2  0 0 3.14159</pose>
         <visual name='visual'>
           <geometry><box><size>0.75 0.51 1e-6</size></box></geometry>
           <material>
