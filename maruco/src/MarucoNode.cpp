@@ -49,11 +49,11 @@ private:
 	image_transport::Subscriber _quad0sub, _quad1sub, _quad2sub, _quad3sub;
 	void onQuadFrame(const sensor_msgs::ImageConstPtr& msg);
 	ros::Time _marker2QuadTime = ros::Time(0); // to reject redundant pose estimate
+	ros::Duration _mark2QuadTimeout;//(0.2);
 
 	image_transport::Subscriber _monosub;
 	void onMonoFrame(const sensor_msgs::ImageConstPtr& msg);
 	ros::Time _marker2MonoTime = ros::Time(0);
-	ros::Duration _mark2MonoTimeout;//(0.1);
 
 	ros::Subscriber _quad0calSub, _quad1calSub, _quad2calSub, _quad3calSub;
 	void onQuadCal(const sensor_msgs::CameraInfo &msg) {
@@ -131,7 +131,7 @@ Maruco::Maruco()
 , _quad3calSub(_nh.subscribe("/quad3/camera_info", 1 , &Self::onQuadCal, this))
 , _monosub(_it.subscribe("/webcam/image_raw", 1, &Self::onMonoFrame, this))
 , _monoCalSub(_nh.subscribe("/webcam/camera_info", 1 , &Self::onMonoCal, this))
-, _mark2MonoTimeout(0.1)
+, _mark2QuadTimeout(0.2)
 , _cam2marker_pub(_ph.advertise<geometry_msgs::PoseStamped>("cam2marker", 1, true))
 , _tf2_listener(tf2_buffer_)
 , _tf2_filter(_cam2marker_sub, tf2_buffer_, "quad_link", 10, 0)
@@ -366,7 +366,6 @@ void Maruco::onQuadFrame(const sensor_msgs::ImageConstPtr& msg) {
 			|| !aruco::estimatePoseBoard(markerCorners, markerIds, _board
 					, _quadIntrinsic[id], _quadDistortion[id] //, rvec, tvec
 					, _quadState[id].rvec, _quadState[id].tvec
-					// sometimes yields Z axis going INTO the board. so can't use this
 					// , cv::SOLVEPNP_P3P
 					)) {
 			return;
@@ -390,11 +389,6 @@ void Maruco::onQuadFrame(const sensor_msgs::ImageConstPtr& msg) {
 				, markerIdStr.c_str(), id
 				, tvec[0], tvec[1], tvec[2], rvec[0], rvec[1], rvec[2]);
 
-		if (msg->header.stamp - _marker2MonoTime <= _mark2MonoTimeout) {
-			ROS_DEBUG_THROTTLE(1,
-				"webcam based estimate is current; skipping backup localization estimate");
-			return;
-		}
 		/* Publish TF note the flipping from CV --> ROS
 			Units should be in meters and radians. The OpenCV uses
 			Z+ to represent depth, Y- for height and X+ for lateral,
@@ -558,8 +552,7 @@ void Maruco::onMonoFrame(const sensor_msgs::ImageConstPtr& msg) {
 			|| !aruco::estimatePoseBoard(markerCorners, markerIds, _board
 					, _monoIntrinsic, _monoDistortion //, rvec, tvec
 					, _monoState.rvec, _monoState.tvec
-					// sometimes yields Z axis going INTO the board. so can't use this
-					// , cv::SOLVEPNP_P3P
+					// , cv::SOLVEPNP_P3P// yield wrong answer
 					)) {
 			return;
 		}
@@ -579,6 +572,12 @@ void Maruco::onMonoFrame(const sensor_msgs::ImageConstPtr& msg) {
 				, tvec[0], tvec[1], tvec[2], rvec[0], rvec[1], rvec[2]);
 		tf2::Quaternion Q(rvec[2] * scale, -rvec[0] * scale, -rvec[1] * scale
 						, cos(0.5f * angle));
+
+		if (msg->header.stamp - _marker2QuadTime <= _mark2QuadTimeout) {
+			ROS_DEBUG_THROTTLE(1,
+				"quad estimate is current; skipping backup localization estimate");
+			return;
+		}
 #if 0 // direct broadcast doesn't work for some reason
 		tf2::Vector3 axis = Q.getAxis();
 		double yaw = 0;

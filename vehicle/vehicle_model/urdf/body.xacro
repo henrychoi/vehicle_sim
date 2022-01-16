@@ -33,35 +33,29 @@
     </link>
 
     <joint name="${suffix}_5whl_joint1" type="fixed">
+      <origin xyz="0.125 0 0.145" rpy="0 0 0" />
       <parent link="${parent}"/>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
-      <child  link="${suffix}_5whl1"/>
+      <child  link="${suffix}_5whl"/>
     </joint>  
-    <link name="${suffix}_5whl1">
+    <link name="${suffix}_5whl">
       <inertial>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
         <mass value="0.01"/>
         <inertia ixx="0.001" ixy="0.0" ixz="0.0" 
                  iyy="0.001" iyz="0.0" 
                  izz="0.001"/>
       </inertial>
       <visual>
-        <origin xyz="0.125 0 0.145" rpy="0 0 0"/>
-        <geometry>
-          <box size="0.024 0.024 0.024"/>
-        </geometry>
+        <geometry><box size="0.024 0.024 0.024"/></geometry>
         <material name="black">
-            <color rgba="${25/255} ${25/255} ${25/255} .9"/>
+          <color rgba="${25/255} ${25/255} ${25/255} .9"/>
         </material>
       </visual>
       <collision name="5whl_collision">
-        <origin xyz="0.125 0 0.145" rpy="0 0 0"/>
-        <geometry>
-          <box size="0.024 0.024 0.024"/>
-        </geometry>
+        <geometry><box size="0.024 0.024 0.024"/></geometry>
       </collision>
 
     <sensor name='5whl_sensor' type='contact'>
+        <pose frame=''>0 0 0.4075  0 0 0</pose>
         <always_on>1</always_on>
         <contact>
           <collision>5whl_collision</collision>
@@ -71,95 +65,69 @@
           <bumperTopicName>5whl_contact</bumperTopicName>
           <frameName>5whl</frameName>
         </plugin>
-        <pose frame=''>0 0 0.4075 0 -0 0</pose>
       </sensor>
     </link>
     <joint name="${suffix}_5whl_joint2" type="fixed">
-      <parent link="${parent}"/>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin xyz="0.09 -0.022 0" rpy="0 0 0.2617994" />
+      <parent link="${suffix}_5whl"/>
       <child  link="${suffix}_5whl2"/>
     </joint>  
+
     <link name="${suffix}_5whl2">
       <inertial>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
         <mass value="0.01"/>
         <inertia ixx="0.001" ixy="0.0" ixz="0.0" 
                  iyy="0.001" iyz="0.0" 
                  izz="0.001"/>
       </inertial>
       <visual>
-        <origin xyz="0.09 -0.022 0.145" rpy="0 0 0.2617994"/>
-        <geometry>
-          <box size="0.05 0.01 0.024"/>
-        </geometry>
-        <material name="black">
-            <color rgba="${25/255} ${25/255} ${25/255} .9"/>
-        </material>
+        <geometry><box size="0.05 0.01 0.024"/></geometry>
+        <material name="black"><color rgba="0 0 0 .9"/></material>
       </visual>
       <collision>
-        <origin xyz="0.09 -0.022 0.145" rpy="0 0 0.2617994"/>
-        <geometry>
-          <box size="0.05 0.01 0.024"/>
-        </geometry>
+        <geometry><box size="0.05 0.01 0.024"/></geometry>
       </collision>
     </link>
+
     <joint name="${suffix}_5whl_joint3" type="fixed">
-      <parent link="${parent}"/>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
+      <origin xyz="0.09 0.022 0" rpy="0 0 -0.2617994" />
+      <parent link="${suffix}_5whl"/>
       <child  link="${suffix}_5whl3"/>
-    </joint>  
+    </joint>
     <link name="${suffix}_5whl3">
       <inertial>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
         <mass value="0.01"/>
         <inertia ixx="0.001" ixy="0.0" ixz="0.0" 
                  iyy="0.001" iyz="0.0" 
                  izz="0.001"/>
       </inertial>
       <visual>
-        <origin xyz="0.09 0.022 0.145" rpy="0 0 -0.2617994"/>
-        <geometry>
-          <box size="0.05 0.01 0.024"/>
-        </geometry>
-        <material name="black">
-            <color rgba="${25/255} ${25/255} ${25/255} .9"/>
-        </material>
+        <geometry><box size="0.05 0.01 0.024"/></geometry>
+        <material name="black"><color rgba="0 0 0 .9"/></material>
       </visual>
       <collision>
-        <origin xyz="0.09 0.022 0.145" rpy="0 0 -0.2617994"/>
-        <geometry>
-          <box size="0.05 0.01 0.024"/>
-        </geometry>
+        <geometry><box size="0.05 0.01 0.024"/></geometry>
       </collision>
     </link>
 
     <joint name="${suffix}_L_fender_joint" type="fixed">
+      <origin xyz="-0.06 0.1 0.08" rpy="1.5707963 0 0"/>
       <parent link="${parent}"/>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
       <child  link="${suffix}_L_fender"/>
     </joint>  
     <link name="${suffix}_L_fender">
       <inertial>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
         <mass value="0.01"/>
         <inertia ixx="0.01" ixy="0.0" ixz="0.0" 
                  iyy="0.01" iyz="0.0" 
                  izz="0.01"/>
       </inertial>
       <visual>
-        <origin xyz="-0.06 0.1 0.08" rpy="1.5707963 0 0"/>
-        <geometry>
-          <cylinder radius="0.005" length="0.15"/>
-        </geometry>
-        <material name="black">
-            <color rgba="${25/255} ${25/255} ${25/255} .9"/>
-        </material>
+        <geometry><cylinder radius="0.005" length="0.15"/></geometry>
+        <material name="black"><color rgba="0 0 0 .9"/></material>
       </visual>
       <collision name="L_fender_collision">
-        <origin xyz="-0.06 0.1 0.08" rpy="1.5707963 0 0"/>
-        <geometry>
-           <cylinder radius="0.005" length="0.15"/>
-        </geometry>
+        <geometry><cylinder radius="0.005" length="0.15"/></geometry>
       </collision>
 
       <sensor name='L_fender_sensor' type='contact'>
@@ -172,61 +140,45 @@
           <bumperTopicName>L_fender_contact</bumperTopicName>
           <frameName>L_fender</frameName>
         </plugin>
-        <pose frame=''>0 0 0.4075 0 -0 0</pose>
       </sensor>
     </link>
   
     <joint name="${suffix}_L_skirt_joint" type="fixed">
+      <origin xyz="-0.06 0.145 0.045" rpy="0 0 0"/>
       <parent link="${parent}"/>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
       <child  link="${suffix}_L_skirt"/>
     </joint>  
     <link name="${suffix}_L_skirt">
       <inertial>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
         <mass value="0.01"/>
         <inertia ixx="0.01" ixy="0.0" ixz="0.0" 
                  iyy="0.01" iyz="0.0" 
                  izz="0.01"/>
       </inertial>
       <visual>
-        <origin xyz="-0.06 0.145 0.045" rpy="0 0 0"/>
-        <geometry>
-          <box size="0.001 0.06 0.06"/>
-        </geometry>
-        <material name="black">
-            <color rgba="${25/255} ${25/255} ${25/255} .9"/>
-        </material>
+        <geometry><box size="0.001 0.06 0.06"/></geometry>
+        <material name="black"><color rgba="0 0 0 .9"/></material>
       </visual>
     </link>
 
     <joint name="${suffix}_R_fender_joint" type="fixed">
+      <origin xyz="-0.06 -0.1 0.08" rpy="1.5707963 0 0"/>
       <parent link="${parent}"/>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
       <child  link="${suffix}_R_fender"/>
     </joint>  
     <link name="${suffix}_R_fender">
       <inertial>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
         <mass value="0.01"/>
         <inertia ixx="0.01" ixy="0.0" ixz="0.0" 
                  iyy="0.01" iyz="0.0" 
                  izz="0.01"/>
       </inertial>
       <visual>
-        <origin xyz="-0.06 -0.1 0.08" rpy="1.5707963 0 0"/>
-        <geometry>
-          <cylinder radius="0.005" length="0.15"/>
-        </geometry>
-        <material name="black">
-            <color rgba="${25/255} ${25/255} ${25/255} .9"/>
-        </material>
+        <geometry><cylinder radius="0.005" length="0.15"/></geometry>
+        <material name="black"><color rgba="0 0 0 .9"/></material>
       </visual>
       <collision name="R_fender_collision">
-        <origin xyz="-0.06 -0.1 0.08" rpy="1.5707963 0 0"/>
-        <geometry>
-           <cylinder radius="0.005" length="0.15"/>
-        </geometry>
+        <geometry><cylinder radius="0.005" length="0.15"/></geometry>
       </collision>
 
       <sensor name='R_fender_sensor' type='contact'>
@@ -239,31 +191,24 @@
           <bumperTopicName>R_fender_contact</bumperTopicName>
           <frameName>R_fender</frameName>
         </plugin>
-        <pose frame=''>0 0 0.4075 0 -0 0</pose>
       </sensor>
     </link>
   
     <joint name="${suffix}_R_skirt_joint" type="fixed">
+      <origin xyz="-0.06 -0.145 0.045" rpy="0 0 0"/>
       <parent link="${parent}"/>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
       <child  link="${suffix}_R_skirt"/>
     </joint>  
     <link name="${suffix}_R_skirt">
       <inertial>
-        <origin xyz="0 0 0" rpy="0 0 0"/>
         <mass value="0.01"/>
         <inertia ixx="0.01" ixy="0.0" ixz="0.0" 
                  iyy="0.01" iyz="0.0" 
                  izz="0.01"/>
       </inertial>
       <visual>
-        <origin xyz="-0.06 -0.145 0.045" rpy="0 0 0"/>
-        <geometry>
-          <box size="0.001 0.06 0.06"/>
-        </geometry>
-        <material name="black">
-            <color rgba="${25/255} ${25/255} ${25/255} .9"/>
-        </material>
+        <geometry><box size="0.001 0.06 0.06"/></geometry>
+        <material name="black"><color rgba="0 0 0 .9"/></material>
       </visual>
    </link>
 

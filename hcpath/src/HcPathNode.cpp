@@ -154,11 +154,14 @@ class HcPathNode {
 	tf2_ros::Buffer tf2_buffer_;
 	tf2_ros::TransformListener tf2_listener_;
 
-	geometry_msgs::TransformStamped _xform2kingpin, _xform2hitch;
-	bool _haveXform2kingpin = false, _haveXform2hitch = false;
-
+	geometry_msgs::TransformStamped _xform2kingpin, _xform2hitch, _xform2fifth;
+	bool _haveXform2kingpin = false, _haveXform2hitch = false, _haveXform2Fifth = false
+		// Assume the transform from base_footprint to side hitch center is the same
+		// as that to the fifth wheel
+		;  
 	double _eAxialInt = 0, _eKappaInt = 0
-		, _Kforward_s, _Kback_axial, _Kback_intaxial // throttle gains
+		, _Kforward_s, _Kforward_kappa, _Kback_axial, _Kback_intaxial // throttle gains
+		, _Max_intaxial // integral limit
 		, _Kback_theta, _Kback_kappa, _Kback_intkappa, _Kback_lateral;
 
 	static constexpr double kPathRes = 0.05; // [m]
@@ -229,6 +232,7 @@ HcPathNode::HcPathNode()
 
 	// control gains
 	_nh.param("Kforward_s", _Kforward_s, 1.);
+	_nh.param("Kforward_kappa", _Kforward_kappa, 0.1);
 	_nh.param("Kback_axial", _Kback_axial, 1.);
 	_nh.param("Kback_intaxial", _Kback_intaxial, 0.01);
 
@@ -320,18 +324,30 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 	const auto t0 = ros::Time::now();
 	if (!_haveXform2kingpin) {
 		try {
-			_xform2kingpin = tf2_buffer_.lookupTransform("trailer", "kingpin", ros::Time(0));
+			_xform2kingpin = tf2_buffer_.lookupTransform("trailer", "kingpin"
+					, ros::Time(0));
 			_haveXform2kingpin = true;
 		} catch (tf2::TransformException &ex) {
-			ROS_ERROR("onTfStrobe trailer --> kinpin failed; reason: %s", ex.what());
+			ROS_ERROR("onTfStrobe trailer --> kinpin failed: %s", ex.what());
 		}
 	}
 	if (!_haveXform2hitch) {
 		try {
-			_xform2hitch = tf2_buffer_.lookupTransform("trailer", "hitch_center", ros::Time(0));
+			_xform2hitch = tf2_buffer_.lookupTransform("trailer", "hitch_center"
+					, ros::Time(0));
 			_haveXform2hitch = true;
 		} catch (tf2::TransformException &ex) {
-			ROS_ERROR("onTfStrobe trailer --> hitch_center failed; reason: %s", ex.what());
+			ROS_ERROR("onTfStrobe trailer --> hitch_center failed: %s", ex.what());
+		}
+	}
+	if (!_haveXform2Fifth) {
+		try {
+			_xform2fifth = tf2_buffer_.lookupTransform("base_footprint", "base_5whl"
+					, ros::Time(0));
+			_haveXform2Fifth = true;
+		} catch (tf2::TransformException &ex) {
+			ROS_ERROR("onTfStrobe base_footprint -> base_5whl failed: %s"
+					, ex.what());
 		}
 	}
 
@@ -359,33 +375,38 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 
 	_tfTimeout = t0 + _tfWatchdogPeriod;
 
-	if (_pathSign && inParkingState(ParkingState::stopped)) {
-		// check if car has arrived at the goal
-		// TODO: replace with contact sensor
-		double e_x = (_pathSign > 0
-						? _xform2kingpin.transform.translation.x
-						: _xform2hitch.transform.translation.x)
-					- _2Dpose.T[0]
-			, e_y = _2Dpose.T[1]
-			, e_t = M_PI * signbit(_pathSign) - _2Dpose.yaw;
-		ROS_WARN("Docking to %d, error %.2f, %.2f, %.2f", _pathSign, e_x, e_y, e_t);
-		static constexpr double kEpsilon = 0.01, kEpsilonSq = kEpsilon * kEpsilon;
-		if (e_t*e_t < kEpsilonSq && e_y*e_y < kEpsilonSq) {
+	double nominal = _pathSign > 0
+			? _xform2kingpin.transform.translation.x - _xform2fifth.transform.translation.x
+			: _xform2hitch.transform.translation.x + _xform2fifth.transform.translation.x
+		, e_x = nominal - _2Dpose.T[0]
+		, e_y = -_2Dpose.T[1]
+		, e_t = M_PI * signbit(_pathSign) - _2Dpose.yaw;
+	ROS_INFO_THROTTLE(1, "Docking to %d, error %.2f, %.2f, %.2f", _pathSign, e_x, e_y, e_t);
+	static constexpr double kEpsilon = 0.03, kEpsilonSq = kEpsilon * kEpsilon;
+
+	if (_pathSign) { // trying to control the vehicle
+		if (e_t*e_t < kEpsilonSq && e_x*e_x < kEpsilonSq && e_y*e_y < kEpsilonSq) {
 			ROS_ERROR("Docked successfully!");
-			_parkingState = ParkingState::idle;
+			_parkingState = ParkingState::idle; _gear = 0;
 			_pathSign = 0;
-		} else { // try to park (again)
-			ROS_ERROR("Trying to dock");
+		} else if (inParkingState(ParkingState::stopped)) {
+			// check if car has arrived at the goal
+			// TODO: replace with contact sensor
+			// try to park (again)
+			ROS_ERROR("Trying to dock (again)");
 			if (heuristic_plan()) {
 				_gear = 0; // put into N to get going
 			} else {
 				_gear = -128; // non-recoverable failure
 			}
 		}
-	} else if(abs(_gear) == 1) {// check for collision while driving (in gear)
+	}
+	
+	if(abs(_gear) == 1) {// check for collision while driving (in gear)
 		_dist2Trailer = dist2trailer(static_cast<float>(_2Dpose.T[0])
-				, static_cast<float>(_2Dpose.T[1]), _2Dpose.yaw);
-		auto elapsed = ros::Time::now() - t0;
+									, static_cast<float>(_2Dpose.T[1])
+									, _2Dpose.yaw);
+		// auto elapsed = ros::Time::now() - t0;
 		// ROS_DEBUG_THROTTLE(1, "collision checking took %u ns", elapsed.nsec);
 	}
 }
@@ -444,15 +465,23 @@ bool HcPathNode::heuristic_plan() {
 	} else {// drive toward target
 		double angleFromTarget;
 		if (_pathSign > 0) { // dock to the front
-			goal.x = _xform2kingpin.transform.translation.x
-					+ abs(_2Dpose.T[1]) + abs(pify(goal.theta - _2Dpose.yaw)) * _wheel_base;
-			angleFromTarget = abs(atan2(start.y
-									, start.x - _xform2kingpin.transform.translation.x));
-		} else {
-			goal.x = _xform2hitch.transform.translation.x
-					- (abs(_2Dpose.T[1]) + abs(pify(goal.theta - _2Dpose.yaw)) * _wheel_base);
-			angleFromTarget = abs(atan2(start.y
-									, _xform2hitch.transform.translation.x - start.x));
+			auto nominal = _xform2kingpin.transform.translation.x
+			 			// have to go a bit farther for the 5th wheel to reach the kingpin
+						- _xform2fifth.transform.translation.x;
+			goal.x = nominal
+				+ 0.5 * (abs(_2Dpose.T[1])
+				// heuristic: if initial heading far off from straight, aim farther
+				// away from the target
+						+ abs(pify(goal.theta - _2Dpose.yaw)) * _wheel_base);
+			angleFromTarget = abs(atan2(start.y, start.x - nominal));
+		} else { // dock to the back
+			auto nominal = _xform2hitch.transform.translation.x
+			 			// have to go a bit farther for the side hitch to reach the pylons
+						+ _xform2fifth.transform.translation.x;
+			goal.x = nominal
+				- 0.5 * (abs(_2Dpose.T[1])
+						+ abs(pify(goal.theta - _2Dpose.yaw)) * _wheel_base);
+			angleFromTarget = abs(atan2(start.y, nominal - start.x));
 		}
 		static constexpr double kPossibleApproachConeAngle = 0.5; // ~30 deg
 		if (angleFromTarget*angleFromTarget
@@ -715,7 +744,8 @@ void HcPathNode::control(double& throttle, double& curvature) {
 
 			// kappa = ctrl.kappa;
 			curvature = ctrl.kappa + fabs(ds) * ctrl.sigma; // turn the wheel
-			throttle = _Kforward_s * (ctrl.delta_s - ds); // feed-forward throttle
+			throttle = _Kforward_s * (ctrl.delta_s - ds) // feed-forward throttle
+					+ _Kforward_kappa * curvature;
 		} // end feed-forward
 
 		auto ex1 = first.x - _2Dpose.T[0], ey1 = first.y - _2Dpose.T[1]
@@ -775,7 +805,8 @@ void HcPathNode::control(double& throttle, double& curvature) {
 		ROS_INFO_THROTTLE(0.25
 				, "(%.2f, %.2f) gear %d, ds %.2f error %.2f = %.2f; %.2f, %.2f, %.2f = %.2f"
 				, _trueFootprintPose[0], _trueFootprintPose[1]//, _2Dpose.T[0], _2Dpose.T[1]
-				, _gear, ds, eAxial, throttle
+				, _gear, ds
+				, eAxial, throttle
 				, eLateral, eHeading, eKappa, curvature);
 		// visualize actual path
 		if (_actual_path.poses.size()) {
@@ -806,7 +837,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 	curvature += _Kback_kappa * eKappa + _Kback_intkappa * _eKappaInt
 			+ _Kback_theta * eHeading
 			+ _Kback_lateral * eLateral;
-	_eKappaInt = clamp(_eKappaInt + eKappa, -2., 2.);
+	_eKappaInt = clamp(_eKappaInt + eKappa, -_Max_intaxial, _Max_intaxial);
 
 	// I considered using the Cauchy distribution shape to limit the throttle
 	// the curvature curvature error is large, but this is more intuitive
