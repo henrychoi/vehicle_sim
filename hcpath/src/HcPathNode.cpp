@@ -83,16 +83,18 @@ class HcPathNode {
 	}
 
 	float dist2trailer(float x, float y, float yaw) {
-		static constexpr float kLegBase = 0.56f, kLegWidth = 0.44f, kLegRadius = 0.02f;
+		static constexpr float kLegHalfBase = .27f // @see KUEparking world leg1 pose
+			, kLegHalfWidth = .23f
+			, kLegRadius = 0.02f;
 		static constexpr c2AABB kLegAABB[4] = { // legs are modeled as tall boxes
-			{ { 0.5f*kLegBase - kLegRadius,  0.5f*kLegWidth - kLegRadius} // leg1
-			, { 0.5f*kLegBase + kLegRadius,  0.5f*kLegWidth + kLegRadius} },
-			{ { 0.5f*kLegBase - kLegRadius, -0.5f*kLegWidth - kLegRadius} // leg2
-			, { 0.5f*kLegBase + kLegRadius, -0.5f*kLegWidth + kLegRadius} },
-			{ {-0.5f*kLegBase - kLegRadius,  0.5f*kLegWidth - kLegRadius} // leg3
-			, {-0.5f*kLegBase + kLegRadius,  0.5f*kLegWidth + kLegRadius} },
-			{ {-0.5f*kLegBase - kLegRadius, -0.5f*kLegWidth - kLegRadius} // leg4
-			, {-0.5f*kLegBase + kLegRadius, -0.5f*kLegWidth + kLegRadius} }
+			{ { kLegHalfBase - kLegRadius,  kLegHalfWidth - kLegRadius} // leg1
+			, { kLegHalfBase + kLegRadius,  kLegHalfWidth + kLegRadius} },
+			{ { kLegHalfBase - kLegRadius, -kLegHalfWidth - kLegRadius} // leg2
+			, { kLegHalfBase + kLegRadius, -kLegHalfWidth + kLegRadius} },
+			{ {-kLegHalfBase - kLegRadius,  kLegHalfWidth - kLegRadius} // leg3
+			, {-kLegHalfBase + kLegRadius,  kLegHalfWidth + kLegRadius} },
+			{ {-kLegHalfBase - kLegRadius, -kLegHalfWidth - kLegRadius} // leg4
+			, {-kLegHalfBase + kLegRadius, -kLegHalfWidth + kLegRadius} }
 		};
 		float minDist = numeric_limits<float>::max();
 		// check for collision, at (x +- 3tau_x, y +- 3tau_y, theta +- 3tau_theta):

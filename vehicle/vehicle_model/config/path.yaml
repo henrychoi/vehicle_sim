@@ -6,7 +6,7 @@ footprint:
   [0.377, -0.165]]
 
 path:
-  safe_distance: 0.035 # [m] insist on minimum distance
+  safe_distance: 0.02 # [m] insist on minimum distance
 
   kappa_max: 1.48 # [1/m]
   sigma_max: 8 # [1/m^2]; want more responsive steering
