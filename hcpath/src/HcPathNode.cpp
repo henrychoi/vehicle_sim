@@ -389,7 +389,7 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 }
 
 void HcPathNode::onGoal() {
-	if (_parkingState != ParkingState::idle) {
+	if (!inParkingState(ParkingState::idle)) {
 		ROS_ERROR("parking request in non-idle state %u", static_cast<unsigned>(_parkingState));
 		return;
 	}
@@ -582,8 +582,9 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 	double throttle = 0, curvature = 0;
 
 	if (now > _tfTimeout) {
-		ROS_ERROR_THROTTLE(1, "No pose estimate watchdog; no vehicle control");	
-		_gear = 0;
+		ROS_ERROR_THROTTLE(1, "No pose estimate watchdog; stopping");	
+		_openControlQ.clear(); _openStateQ.clear();
+		orParkingState(ParkingState::unsafe); _gear = -127; // ESTOP
 	}
 	switch(_gear) {
 		case -128: throttle = 0; break;// fatal
@@ -592,18 +593,19 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 				, kEpsilonSq = kEpsilon * kEpsilon;
 			ROS_WARN_THROTTLE(1, "E-stopping; wheel speed %.2f %.2f", wl, wr);
 			if (wl*wl < kEpsilonSq && wr*wr < kEpsilonSq) { // stopped
-				++_gear;
-				orParkingState(ParkingState::stopped);			
+				++_gear; orParkingState(ParkingState::stopped);			
 			}
 		}	// fall through
-		case -126: throttle = 0; break;// Need a new path; tell the path planner and wait
+		case -126:
+			throttle = 0;
+			orParkingState(ParkingState::idle);
+			break;// Need a new path; tell the path planner and wait
 
 		case -1: // reverse => approaching the trailer
 			if (_dist2Trailer < _safe_distance) {
 				ROS_ERROR_THROTTLE(1, "Unsafe distance %.3f; stopping", _dist2Trailer);
 				_openControlQ.clear(); _openStateQ.clear();
-				orParkingState(ParkingState::unsafe);				
-				_gear = -127; // ESTOP
+				orParkingState(ParkingState::unsafe); _gear = -127; // ESTOP
 				throttle = 0;
 			} else {
 				control(throttle, curvature);

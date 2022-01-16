@@ -19,7 +19,7 @@
 
   <!-- spawn the truck at a desired X and Y -->
   <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model"
-    args="-param robot_description -urdf -model autoware_gazebo -x 1 -y 0.1 -Y 0"/>
+    args="-param robot_description -urdf -model autoware_gazebo -x -1 -y 0 -Y 3.14159"/>
 
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
 
@@ -48,7 +48,7 @@
 
   </group>
 
-  <node name="aruco" pkg="aruco" type="aruco" required="true" output="screen">
+  <node name="maruco" pkg="maruco" type="maruco" required="true" output="screen">
     <param name="show_axis" type="bool" value="true"/>
     <param name="wheel_base" type="double" value="0.267"/>
     <param name="wheel_tread" type="double" value="0.242"/>

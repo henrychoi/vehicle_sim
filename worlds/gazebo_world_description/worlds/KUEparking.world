@@ -70,7 +70,7 @@
       <static>true</static>
     </model>
 
-    <!--gui>
+    <gui>
       <camera name="chase_cam">
         <track_visual>
           <name>trailer</name>
@@ -79,7 +79,7 @@
           <xyz>0 0 -3</xyz>
         </track_visual>
       </camera>
-    </gui-->
+    </gui>
 
     <model name="trailer">
       <pose>0 0 .30 0 0 0</pose>
