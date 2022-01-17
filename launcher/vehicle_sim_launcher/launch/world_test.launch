@@ -115,7 +115,7 @@
     <param name="Kforward_kappa" type="double" value=".2"/>
     <param name="Kback_axial" type="double" value="20"/>
     <param name="Kback_intaxial" type="double" value="0.02"/>
-    <param name="Max_intaxial" type="double" value="4"/>
+    <param name="Max_intaxial" type="double" value="2"/>
     <param name="Kback_theta" type="double" value="1"/>
     <param name="Kback_kappa" type="double" value="0.5"/>
     <param name="Kback_intkappa" type="double" value="0.01"/>

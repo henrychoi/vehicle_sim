@@ -455,9 +455,12 @@ bool HcPathNode::heuristic_plan() {
 		for (goal.y = 0
 			; !ok && lateralDir * goal.y <= kFallbackDistanceWheelbaseFactor * _wheel_base
 			; goal.y += 0.25 * lateralDir * kFallbackDistanceWheelbaseFactor * _wheel_base) {
+
+			ROS_INFO("Dubins [%.2f, %.2f, %.2f] --> [%.2f, %.2f]"
+					, start.x, start.y, start.theta, goal.x, goal.y);
 			ok = Dubins(start, goal, segments, path);
 			if (!ok) {
-				ROS_WARN("Invalid path generated for lateral %.2f", goal.y);
+				ROS_WARN("Invalid Dubins path generated for lateral %.2f", goal.y);
 			}
 		}
 		if (ok) {
@@ -489,7 +492,7 @@ bool HcPathNode::heuristic_plan() {
 		static constexpr double kPossibleApproachConeAngle = 0.5; // ~30 deg
 		if (angleFromTarget*angleFromTarget
 				< kPossibleApproachConeAngle*kPossibleApproachConeAngle) {
-			ROS_INFO("Dubins path request [%.2f, %.2f, %.2f] %.2f --> [%.2f, %.2f]"
+			ROS_INFO("Dubins [%.2f, %.2f, %.2f] %.2f --> [%.2f, %.2f]"
 					, start.x, start.y, start.theta, angleFromTarget, goal.x, goal.y);
 			ok = Dubins(start, goal, segments, path);
 			if (!ok) {
@@ -516,6 +519,7 @@ bool HcPathNode::heuristic_plan() {
 	auto elapsed = ros::Time::now() - t0;
 	// ROS_WARN("Path planning took %u nsec", elapsed.nsec);
 	if (ok) {
+		_openControlQ.clear(); _openStateQ.clear();
 		for (auto seg: segments) {
 			// auto delta = atan(_wheel_base * seg.kappa);
 			ROS_INFO("control segment %.2f, %.2f, %.2f", seg.delta_s, seg.kappa, seg.sigma);
@@ -541,6 +545,7 @@ bool HcPathNode::heuristic_plan() {
 		ROS_ERROR("Path generation failed whil in parking state 0x%X"
 				, parkingStateEnum(_parkingState));
 	}
+
 	return ok;
 }
 
@@ -639,7 +644,8 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 
 		case -1: // reverse => approaching the trailer
 			if (_dist2Trailer < _safe_distance) {
-				ROS_ERROR_THROTTLE(1, "Unsafe distance %.3f; stopping", _dist2Trailer);
+				ROS_ERROR_THROTTLE(1, "Unsafe distance %.3f @(%.2f, %.2f; %.2f)"
+						, _dist2Trailer, _2Dpose.T[0], _2Dpose.T[1], _2Dpose.yaw);
 				_openControlQ.clear(); _openStateQ.clear();
 				orParkingState(ParkingState::unsafe); _gear = -127; // ESTOP
 				throttle = 0;
@@ -698,11 +704,10 @@ void HcPathNode::control(double& throttle, double& curvature) {
 	static constexpr double kCos30Deg = 0.866;
 	static constexpr double kEpsilon = 0.01  // 1 cm ball
 		, kEpsilonSq = kEpsilon * kEpsilon;
-
+#if 1
 	if (_openControlQ.size()) {
 		const auto& ctrl = _openControlQ.front();
 		curvature = ctrl.kappa;
-
 		if (!_gear) { // I use neutral to switch between gears 
 			auto e = ctrl.kappa - _curvature;
 			if (fabs(e) < 0.05) {
@@ -714,8 +719,22 @@ void HcPathNode::control(double& throttle, double& curvature) {
 			}
 		}
 	}
+#endif
+
 	while (_gear && _openStateQ.size()) {
 		const auto& first = _openStateQ.front();
+#if 0
+		if (!_gear) {
+			auto e = first.kappa - _curvature;
+			if (fabs(e) < 0.05) {
+				_gear = first.d;
+				ROS_WARN("Kappa error %.2f switching gear to %d", e, _gear);
+				_prevS = _s; ds = _s - _prevS;
+				_eAxialInt = 0; // reset integrated axial error
+			}
+			continue;
+		}
+#endif
 		if (_openControlQ.size()) { // feed-forward control
 			const auto& ctrl = _openControlQ.front();
 			auto S = ctrl.delta_s, es = S - ds;
@@ -750,6 +769,14 @@ void HcPathNode::control(double& throttle, double& curvature) {
 			curvature = ctrl.kappa + fabs(ds) * ctrl.sigma; // turn the wheel
 			throttle = _Kforward_s * (ctrl.delta_s - ds) // feed-forward throttle
 					+ _Kforward_kappa * curvature;
+
+			if (_gear * first.d < 0) { 
+				ROS_WARN("Gear in opposite of control; switching gear");
+				_eAxialInt = 0; // reset integral since switching direction
+				_gear = first.d;
+				// _gear = 0;
+				// continue;
+			}
 		} // end feed-forward
 
 		auto ex1 = first.x - _2Dpose.T[0], ey1 = first.y - _2Dpose.T[1]

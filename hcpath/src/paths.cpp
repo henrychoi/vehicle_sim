@@ -95,7 +95,7 @@ void CC_Dubins_Path::print(bool eol) const
       cout << "?";
       break;
   }
-  cout << ", length " << length << ", configurations ";
+  // cout << ", length " << length << ", configurations ";
   start.print(false);
   cout << " -> ";
   if (qi1)
@@ -219,7 +219,7 @@ void HC_CC_RS_Path::print(bool eol) const
       cout << "?";
       break;
   }
-  cout << ", length " << length << ", configurations ";
+  // cout << ", length " << length << ", configurations ";
   start.print(false);
   cout << " -> ";
   if (qi1)

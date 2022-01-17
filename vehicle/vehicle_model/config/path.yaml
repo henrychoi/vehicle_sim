@@ -1,12 +1,12 @@
-# Check "truck_mo" file in Fusion360
+# Check "truck_mo" file in Fusion360.  The width should include rear wheel (+-165)
 footprint:
-  [[0.377, 0.165],
-  [-0.076, 0.165],
-  [-0.076, -0.165],
-  [0.377, -0.165]]
+  [[0.377, 0.155],
+  [-0.076, 0.155],
+  [-0.076, -0.155],
+  [0.377, -0.155]]
 
 path:
-  safe_distance: 0.02 # [m] insist on minimum distance
+  safe_distance: 0.01 # [m] insist on minimum distance
 
   kappa_max: 1.48 # [1/m]
   sigma_max: 8 # [1/m^2]; want more responsive steering
