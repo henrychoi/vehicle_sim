@@ -381,10 +381,11 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 		, e_x = nominal - _2Dpose.T[0]
 		, e_y = -_2Dpose.T[1]
 		, e_t = M_PI * signbit(_pathSign) - _2Dpose.yaw;
-	ROS_INFO_THROTTLE(1, "Docking to %d, error %.2f, %.2f, %.2f", _pathSign, e_x, e_y, e_t);
-	static constexpr double kEpsilon = 0.03, kEpsilonSq = kEpsilon * kEpsilon;
 
 	if (_pathSign) { // trying to control the vehicle
+		ROS_INFO_THROTTLE(1, "Driving to %d, error %.2f, %.2f, %.2f"
+				, _pathSign, e_x, e_y, e_t);
+		static constexpr double kEpsilon = 0.03, kEpsilonSq = kEpsilon * kEpsilon;
 		if (e_t*e_t < kEpsilonSq && e_x*e_x < kEpsilonSq && e_y*e_y < kEpsilonSq) {
 			ROS_ERROR("Docked successfully!");
 			_parkingState = ParkingState::idle; _gear = 0;
