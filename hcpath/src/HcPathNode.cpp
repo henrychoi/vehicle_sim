@@ -739,9 +739,8 @@ void HcPathNode::control(double& throttle, double& curvature) {
 						_gear = 0;
 					}
 				} else {
-					ROS_WARN("Done with path; N gear");
-					_gear = 0;
-					_parkingState = ParkingState::stopped;
+					ROS_WARN("Done with openloop control; N gear");
+					_gear = 0; _parkingState = ParkingState::stopped;
 					_actual_path.poses.clear();
 				}
 				continue;
@@ -776,6 +775,12 @@ void HcPathNode::control(double& throttle, double& curvature) {
 					, first.x, first.y // , first.theta, first.d
 					);
 			_openStateQ.pop_front();
+			if (_openStateQ.size()) { // not done
+			} else {
+				ROS_WARN("Done with waypoints; N gear");
+				_gear = 0; _parkingState = ParkingState::stopped;
+				_actual_path.poses.clear();
+			}
 			continue;
 		}
 
@@ -783,7 +788,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 			const auto& second = _openStateQ[1];
 			auto ex2 = second.x - _2Dpose.T[0], ey2 = second.y - _2Dpose.T[1]
 				, dist2sq = ex2*ex2 + ey2*ey2;
-#if 0
+#if AGGRESSIVE_PRUNING
 			if (dist2sq < kEpsilonSq) {
 				ROS_WARN("Reached waypoint 2 (%.2f, %.2f, %.2f); pruning 2"
 						, second.x, second.y, second.theta);
