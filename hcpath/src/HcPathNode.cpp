@@ -226,7 +226,7 @@ HcPathNode::HcPathNode()
 , tf2_listener_(tf2_buffer_)
 {
 	_actual_path.header.frame_id = "trailer";
-	_tfWatchdogPeriod = ros::Duration(0.3);
+	_tfWatchdogPeriod = ros::Duration(0.4);
 
 	_nh.param("deadman_btn", _deadman_btn, 4);
 
@@ -394,7 +394,7 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 			// check if car has arrived at the goal
 			// TODO: replace with contact sensor
 			// try to park (again)
-			ROS_ERROR("Trying to dock (again)");
+			ROS_ERROR("Stopped; trying again");
 			if (heuristic_plan()) {
 				_gear = 0; // put into N to get going
 			} else {
@@ -438,7 +438,7 @@ bool HcPathNode::heuristic_plan() {
 	// trailer half-width = 0.375; kingpin under the trailer, at 0.27, side hitch at -0.27
 	// static constexpr double kKingpinOffset = 0.10;
 	State goal = {
-		.theta = M_PI * signbit(_pathSign)
+		.theta = M_PI * signbit(_pathSign) // 0 or pi
 		// , .kappa = 0
 		, .d = -1 // this demo just backs up to both kingpin and hitch
 	} , start = { // path planner pose is always relative to the trailer
@@ -449,7 +449,7 @@ bool HcPathNode::heuristic_plan() {
 
 	auto lateralDir = 1 - 2*signbit(_2Dpose.T[1]);
 	static constexpr double kFallbackDistanceWheelbaseFactor = 3;
-	if(inParkingState(ParkingState::approaching)) { // recover from collision risk
+	if (inParkingState(ParkingState::approaching)) { // recover from collision risk
 		start.d = goal.d = 1; // go forward when recovering
 		goal.x = start.x + _pathSign * _wheel_base * kFallbackDistanceWheelbaseFactor;
 		for (goal.y = 0
@@ -475,6 +475,7 @@ bool HcPathNode::heuristic_plan() {
 				// away from the target
 						+ abs(pify(goal.theta - _2Dpose.yaw)) * _wheel_base);
 			angleFromTarget = abs(atan2(start.y, start.x - nominal));
+			// goal.theta = 0;
 		} else { // dock to the back
 			auto nominal = _xform2hitch.transform.translation.x
 			 			// have to go a bit farther for the side hitch to reach the pylons
@@ -483,6 +484,7 @@ bool HcPathNode::heuristic_plan() {
 				- 0.5 * (abs(_2Dpose.T[1])
 						+ abs(pify(goal.theta - _2Dpose.yaw)) * _wheel_base);
 			angleFromTarget = abs(atan2(start.y, nominal - start.x));
+			// goal.theta = M_PI;
 		}
 		static constexpr double kPossibleApproachConeAngle = 0.5; // ~30 deg
 		if (angleFromTarget*angleFromTarget
@@ -520,23 +522,25 @@ bool HcPathNode::heuristic_plan() {
 			_openControlQ.push_back(seg);
 		}
 		_eKappaInt = _eAxialInt = 0;
+
+		nav_msgs::Path nav_path;
+		nav_path.header.frame_id = "trailer";
+		for (const auto& state: path) {
+			geometry_msgs::PoseStamped pose;
+			pose.pose.position.x = state.x;
+			pose.pose.position.y = state.y;
+			pose.pose.orientation.z = sin(0.5 * state.theta);
+			pose.pose.orientation.w = cos(0.5 * state.theta);
+			nav_path.poses.push_back(pose);
+			ROS_INFO("waypoint %.0f, %.2f, %.2f, %.2f, %.2f"
+					, state.d, state.x, state.y, state.theta, state.kappa);
+			_openStateQ.push_back(state);
+		}
+		_planned_pub.publish(nav_path);
 	} else {
-		ROS_ERROR("Path generation failed; state 0x%X", parkingStateEnum(_parkingState));
+		ROS_ERROR("Path generation failed whil in parking state 0x%X"
+				, parkingStateEnum(_parkingState));
 	}
-	nav_msgs::Path nav_path;
-	nav_path.header.frame_id = "trailer";
-	for (const auto& state: path) {
-		geometry_msgs::PoseStamped pose;
-		pose.pose.position.x = state.x;
-		pose.pose.position.y = state.y;
-		pose.pose.orientation.z = sin(0.5 * state.theta);
-		pose.pose.orientation.w = cos(0.5 * state.theta);
-		nav_path.poses.push_back(pose);
-		ROS_INFO("waypoint %.0f, %.2f, %.2f, %.2f, %.2f"
-				, state.d, state.x, state.y, state.theta, state.kappa);
-		_openStateQ.push_back(state);
-	}
-	_planned_pub.publish(nav_path);
 	return ok;
 }
 
@@ -779,13 +783,14 @@ void HcPathNode::control(double& throttle, double& curvature) {
 			const auto& second = _openStateQ[1];
 			auto ex2 = second.x - _2Dpose.T[0], ey2 = second.y - _2Dpose.T[1]
 				, dist2sq = ex2*ex2 + ey2*ey2;
+#if 0
 			if (dist2sq < kEpsilonSq) {
 				ROS_WARN("Reached waypoint 2 (%.2f, %.2f, %.2f); pruning 2"
 						, second.x, second.y, second.theta);
 				_openStateQ.pop_front(); _openStateQ.pop_front();
 				continue;
 			}
-
+#endif
 			auto dot = ex1 * ex2 + ey1 * ey2;//to normalize, / sqrt(dist1sq)*sqrt(dist2sq)
 			ROS_DEBUG("^[%.2f, %.2f, %.2f] (%.2g, %.2g).(%.2g, %.2g)"
 					, _2Dpose.T[0], _2Dpose.T[1], _2Dpose.yaw, ex1, ey1, ex2, ey2);

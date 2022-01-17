@@ -134,7 +134,7 @@ Maruco::Maruco()
 , _quad3calSub(_nh.subscribe("/quad3/camera_info", 1 , &Self::onQuadCal, this))
 , _monosub(_it.subscribe("/webcam/image_raw", 1, &Self::onMonoFrame, this))
 , _monoCalSub(_nh.subscribe("/webcam/camera_info", 1 , &Self::onMonoCal, this))
-, _mark2QuadTimeout(0.2)
+, _mark2QuadTimeout(0.4)
 , _cam2marker_pub(_ph.advertise<geometry_msgs::PoseStamped>("cam2marker", 1, true))
 , _tf2_listener(tf2_buffer_)
 , _tf2_filter(_cam2marker_sub, tf2_buffer_, "quad_link", 10, 0)
@@ -462,7 +462,6 @@ void Maruco::onQuadFrame(const sensor_msgs::ImageConstPtr& msg) {
 				// ignoring redundant observation
 				return;
 			}
-			_marker2QuadTime = quad2marker.header.stamp;
 
 			tf2::Quaternion Q;
 			tf2::fromMsg(quad2marker.pose.orientation, Q);
@@ -481,11 +480,13 @@ void Maruco::onQuadFrame(const sensor_msgs::ImageConstPtr& msg) {
 
 			if (_prevQuadPosition[0]) {
 				auto dx = T.x - _prevQuadPosition[0], dy = T.y - _prevQuadPosition[1];
-				if (dx*dx + dy*dy > _wheel_base * _wheel_base) {
+				if (dx*dx + dy*dy > _wheel_base * _wheel_base
+					&& msg->header.stamp - _marker2QuadTime < _mark2QuadTimeout) {
 					ROS_WARN_THROTTLE(1, "Quad estimate outlier; dropping estimate");
 					return;
 				}
 			}
+			_marker2QuadTime = quad2marker.header.stamp;
 			_prevQuadPosition[0] = T.x; _prevQuadPosition[1] = T.y;
 
 			geometry_msgs::TransformStamped xf;
