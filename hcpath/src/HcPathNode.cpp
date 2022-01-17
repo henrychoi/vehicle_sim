@@ -714,10 +714,10 @@ void HcPathNode::control(double& throttle, double& curvature) {
 		const auto& first = _openStateQ.front();
 		if (_openControlQ.size()) { // feed-forward control
 			const auto& ctrl = _openControlQ.front();
-			auto S = ctrl.delta_s;
-			if (//ctrl.delta_s * first.d < 0 || // control in wrong direction
-				// moved too far past the control endpoint
-				(1 - 2*signbit(ctrl.delta_s)) * (ctrl.delta_s - ds) < 0 //-kEpsilon
+			auto S = ctrl.delta_s, es = S - ds;
+			if (// moved too far past the control endpoint
+				(1 - 2*signbit(ctrl.delta_s)) * es < 0 //-kEpsilon
+				|| (abs(es) < 0.1 && S * first.d < 0) // control in wrong direction
 				) { 
 				ROS_WARN("Pruning control (%.2f, %.2f, %.2f), "
 						"waypoint (%.0f %.2f, %.2f)"
