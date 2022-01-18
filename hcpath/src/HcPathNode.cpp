@@ -126,7 +126,7 @@ class HcPathNode {
 	void onTfStrobe(const std_msgs::Header::ConstPtr&);
 
     ros::Subscriber joint_sub_;
-    static constexpr double kMaxThrottle = 2, kMaxSteer = 0.6; // 30 deg
+    static constexpr double kMaxThrottle = 1.5, kMaxSteer = 0.6; // 30 deg
 	void onJointState(const sensor_msgs::JointState::ConstPtr &state);
 	void control(double& throttle, double& curvature);
 
@@ -184,6 +184,8 @@ class HcPathNode {
 
 	deque<Control> _openControlQ;
 	deque<State> _openStateQ;
+	ros::Time _waypointTimeout;
+	const ros::Duration _waypointDeadline;
 	double _s, _prevS = 0, _curvature;
 
 	// deque<geometry_msgs::PoseStamped> _actual_path;
@@ -221,12 +223,14 @@ HcPathNode::HcPathNode()
 , joy_sub_(_nh.subscribe<sensor_msgs::Joy>("/dbw/joy", 10, &Self::onJoy, this))
 , gazebo_sub_(_nh.subscribe("/truth/link_states", 1, &Self::onGazeboLinkStates, this))
 // , server_(_nh.advertiseService("plan", &Self::onPathRequest, this))
+, _tfWatchdogPeriod(0.4)
 , as_(_nh, "/path" //, boost::bind(&Self::onRequest, this, _1)
 	, false)// THIS SHOULD ALWAYS BE SET TO FALSE TO AVOID RACE CONDITIONS
 , tf2_listener_(tf2_buffer_)
+, _waypointDeadline(3)
 {
 	_actual_path.header.frame_id = "trailer";
-	_tfWatchdogPeriod = ros::Duration(0.4);
+	// _tfWatchdogPeriod = ros::Duration(0.4);
 
 	_nh.param("deadman_btn", _deadman_btn, 4);
 
@@ -397,7 +401,8 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 			ROS_ERROR("Stopped; trying again");
 			if (heuristic_plan()) {
 				_gear = 0; // put into N to get going
-			} else {
+			} else { // give up
+				_parkingState = ParkingState::idle;
 				_gear = -128; // non-recoverable failure
 			}
 		}
@@ -439,34 +444,48 @@ bool HcPathNode::heuristic_plan() {
 	// static constexpr double kKingpinOffset = 0.10;
 	State goal = {
 		.theta = M_PI * signbit(_pathSign) // 0 or pi
-		// , .kappa = 0
-		, .d = -1 // this demo just backs up to both kingpin and hitch
+		, .kappa = 0
+		// , .d = -1 // this demo just backs up to both kingpin and hitch
 	} , start = { // path planner pose is always relative to the trailer
 		.x = _2Dpose.T[0], .y = _2Dpose.T[1], .theta = _2Dpose.yaw
 		, .kappa = _curvature // the current curvature
-		, .d = -1 // assume we are in R for the demo
+		// , .d = -1 // assume we are in R for the demo
 	};
 
 	auto lateralDir = 1 - 2*signbit(_2Dpose.T[1]);
-	static constexpr double kFallbackDistanceWheelbaseFactor = 3;
+	// static constexpr double kFallbackDistanceWheelbaseFactor = 3;
+	auto backoff = abs(_2Dpose.T[1])
+			// heuristic: if initial heading far off from straight,
+			// aim farther away from the target
+			+ (abs(pify(goal.theta - _2Dpose.yaw)) + 1) * _wheel_base;
+
 	if (inParkingState(ParkingState::approaching)) { // recover from collision risk
 		start.d = goal.d = 1; // go forward when recovering
-		goal.x = start.x + _pathSign * _wheel_base * kFallbackDistanceWheelbaseFactor;
+		goal.x = start.x + _pathSign * backoff;
 		for (goal.y = 0
-			; !ok && lateralDir * goal.y <= kFallbackDistanceWheelbaseFactor * _wheel_base
-			; goal.y += 0.25 * lateralDir * kFallbackDistanceWheelbaseFactor * _wheel_base) {
-
-			ROS_INFO("Dubins [%.2f, %.2f, %.2f] --> [%.2f, %.2f]"
-					, start.x, start.y, start.theta, goal.x, goal.y);
+			; !ok && lateralDir * goal.y <= backoff
+			; goal.y += 0.25 * lateralDir * backoff) {
+			ROS_INFO("distancing Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
+					, start.x, start.y, start.theta, start.kappa
+					, goal.x, goal.y, goal.theta);
 			ok = Dubins(start, goal, segments, path);
 			if (!ok) {
-				ROS_WARN("Invalid Dubins path generated for lateral %.2f", goal.y);
+				ROS_WARN("Invalid distancing Dubins path generated for lateral %.2f"
+						, goal.y);
+#if 1
+				for (auto seg: segments) {
+					ROS_INFO("Dubins control %.2f, %.2f, %.2f"
+							, seg.delta_s, seg.kappa, seg.sigma);
+					_openControlQ.push_back(seg);
+				}
+#endif
 			}
 		}
 		if (ok) {
 			_parkingState = ParkingState::distancing;				
 		}
-	} else {// drive toward target
+	} else {// backup into target
+		start.d = goal.d = -1; // go forward when recovering
 		double angleFromTarget;
 		if (_pathSign > 0) { // dock to the front
 			auto nominal = _xform2kingpin.transform.translation.x
@@ -492,17 +511,25 @@ bool HcPathNode::heuristic_plan() {
 		static constexpr double kPossibleApproachConeAngle = 0.5; // ~30 deg
 		if (angleFromTarget*angleFromTarget
 				< kPossibleApproachConeAngle*kPossibleApproachConeAngle) {
-			ROS_INFO("Dubins [%.2f, %.2f, %.2f] %.2f --> [%.2f, %.2f]"
-					, start.x, start.y, start.theta, angleFromTarget, goal.x, goal.y);
+			ROS_INFO("approaching Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
+					, start.x, start.y, start.theta, start.kappa
+					, goal.x, goal.y, goal.theta);
 			ok = Dubins(start, goal, segments, path);
 			if (!ok) {
-				ROS_WARN("Invalid path generated");
+				ROS_WARN("Invalid approaching Dubins generated");
+#if 1
+				for (auto seg: segments) {
+					ROS_INFO("Dubins control %.2f, %.2f, %.2f"
+							, seg.delta_s, seg.kappa, seg.sigma);
+					_openControlQ.push_back(seg);
+				}
+#endif
 			}
 		}
 		// outside single-pass cone
 		for (goal.y = 0
-			; !ok && lateralDir * goal.y <= kFallbackDistanceWheelbaseFactor * _wheel_base
-			; goal.y += 0.25 * lateralDir * kFallbackDistanceWheelbaseFactor * _wheel_base) {
+			; !ok && lateralDir * goal.y <= backoff
+			; goal.y += 0.25 * lateralDir * backoff) {
 			// can't drive straight to the target drive to the recovery position instead
 			// heuristic based recovery planner
 			// move away from the trailer
@@ -699,12 +726,13 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 
 // @precondition Have vehicle pose estimate
 void HcPathNode::control(double& throttle, double& curvature) {
+	const auto now = ros::Time::now();
+
 	auto ds = _s - _prevS; // displacement along the path
 	double eAxial = 0, eLateral = 0, eHeading = 0, eKappa = 0;
 	static constexpr double kCos30Deg = 0.866;
 	static constexpr double kEpsilon = 0.01  // 1 cm ball
 		, kEpsilonSq = kEpsilon * kEpsilon;
-#if 1
 	if (_openControlQ.size()) {
 		const auto& ctrl = _openControlQ.front();
 		curvature = ctrl.kappa;
@@ -716,25 +744,21 @@ void HcPathNode::control(double& throttle, double& curvature) {
 						, e, _gear);
 				_prevS = _s; ds = _s - _prevS;
 				_eAxialInt = 0; // reset integrated axial error
+				_waypointTimeout = now + _waypointDeadline;
 			}
 		}
 	}
-#endif
 
 	while (_gear && _openStateQ.size()) {
 		const auto& first = _openStateQ.front();
-#if 0
-		if (!_gear) {
-			auto e = first.kappa - _curvature;
-			if (fabs(e) < 0.05) {
-				_gear = first.d;
-				ROS_WARN("Kappa error %.2f switching gear to %d", e, _gear);
-				_prevS = _s; ds = _s - _prevS;
-				_eAxialInt = 0; // reset integrated axial error
-			}
+		if (now > _waypointTimeout) {
+			ROS_INFO("Giving up on waypoint (%.2f, %.2f, %.2f)"
+					, first.x, first.y, first.theta);
+			_openStateQ.pop_front();
+			_waypointTimeout = now + _waypointDeadline;
 			continue;
 		}
-#endif
+
 		if (_openControlQ.size()) { // feed-forward control
 			const auto& ctrl = _openControlQ.front();
 			auto S = ctrl.delta_s, es = S - ds;
@@ -789,6 +813,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 			ROS_INFO("^[%.2f, %.2f] reached waypoint 1 (%.2f, %.2f, %.2f); pruning 1"
 					, _2Dpose.T[0], _2Dpose.T[1], first.x, first.y, first.theta);
 			_openStateQ.pop_front();
+			_waypointTimeout = now + _waypointDeadline;
 			continue;
 		}
 		// At this point, have at least 1 waypoint to measure the error to
@@ -802,8 +827,9 @@ void HcPathNode::control(double& throttle, double& curvature) {
 					, first.x, first.y // , first.theta, first.d
 					);
 			_openStateQ.pop_front();
+ 			_waypointTimeout = now + _waypointDeadline;
 			if (_openStateQ.size()) { // not done
-			} else {
+ 			} else {
 				ROS_WARN("Done with waypoints; N gear");
 				_gear = 0; _parkingState = ParkingState::stopped;
 				_actual_path.poses.clear();
@@ -820,6 +846,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 				ROS_WARN("Reached waypoint 2 (%.2f, %.2f, %.2f); pruning 2"
 						, second.x, second.y, second.theta);
 				_openStateQ.pop_front(); _openStateQ.pop_front();
+				_waypointTimeout = now + _waypointDeadline;
 				continue;
 			}
 #endif
@@ -827,8 +854,9 @@ void HcPathNode::control(double& throttle, double& curvature) {
 			ROS_DEBUG("^[%.2f, %.2f, %.2f] (%.2g, %.2g).(%.2g, %.2g)"
 					, _2Dpose.T[0], _2Dpose.T[1], _2Dpose.yaw, ex1, ey1, ex2, ey2);
 			if (dot < sqrt(dist1sq * dist2sq) * kCos30Deg) {
-				_openStateQ.pop_front();
 				ROS_INFO("Prune past waypoint");
+				_openStateQ.pop_front();
+				_waypointTimeout = now + _waypointDeadline;
 				continue;
 			}
 		}
