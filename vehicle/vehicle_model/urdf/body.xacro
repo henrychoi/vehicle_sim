@@ -68,7 +68,7 @@
       </sensor>
     </link>
     <joint name="${suffix}_5whl_joint2" type="fixed">
-      <origin xyz="0.09 -0.022 0" rpy="0 0 0.2617994" />
+      <origin xyz="-0.035 -0.022 0" rpy="0 0 0.2617994" />
       <parent link="${suffix}_5whl"/>
       <child  link="${suffix}_5whl2"/>
     </joint>  
@@ -90,7 +90,7 @@
     </link>
 
     <joint name="${suffix}_5whl_joint3" type="fixed">
-      <origin xyz="0.09 0.022 0" rpy="0 0 -0.2617994" />
+      <origin xyz="-0.035 0.022 0" rpy="0 0 -0.2617994" />
       <parent link="${suffix}_5whl"/>
       <child  link="${suffix}_5whl3"/>
     </joint>
