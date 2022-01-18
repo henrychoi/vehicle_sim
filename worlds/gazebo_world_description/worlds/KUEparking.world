@@ -20,7 +20,7 @@
     <!-- Invisible ground plane -->
     <model name="ground_plane">
       <static>true</static>
-      <link name="link">
+      <link name="ground_link">
         <collision name="ground_collision">
           <geometry>
             <plane>
@@ -76,11 +76,15 @@
           <name>trailer</name>
           <static>true</static>
           <use_model_frame>true</use_model_frame>
-          <xyz>0 0 -3</xyz>
+          <xyz>0 0 -2.5</xyz>
         </track_visual>
       </camera>
     </gui>
 
+    <joint name="trailer_joint" type="fixed">
+      <parent>ground_link</parent>
+      <child>trailer</child>
+    </joint>
     <model name="trailer">
       <pose>0 0 .30 0 0 0</pose>
       <static>false</static>

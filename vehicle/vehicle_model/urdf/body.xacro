@@ -111,7 +111,7 @@
     </link>
 
     <joint name="${suffix}_L_fender_joint" type="fixed">
-      <origin xyz="-0.06 0.1 0.08" rpy="1.5707963 0 0"/>
+      <origin xyz="-0.06 0.09 0.08" rpy="1.5707963 0 0"/>
       <parent link="${parent}"/>
       <child  link="${suffix}_L_fender"/>
     </joint>  
@@ -123,11 +123,11 @@
                  izz="0.01"/>
       </inertial>
       <visual>
-        <geometry><cylinder radius="0.005" length="0.15"/></geometry>
+        <geometry><cylinder radius="0.005" length="0.14"/></geometry>
         <material name="black"><color rgba="0 0 0 .9"/></material>
       </visual>
       <collision name="L_fender_collision">
-        <geometry><cylinder radius="0.005" length="0.15"/></geometry>
+        <geometry><cylinder radius="0.005" length="0.14"/></geometry>
       </collision>
 
       <sensor name='L_fender_sensor' type='contact'>
@@ -142,27 +142,9 @@
         </plugin>
       </sensor>
     </link>
-  
-    <joint name="${suffix}_L_skirt_joint" type="fixed">
-      <origin xyz="-0.06 0.145 0.045" rpy="0 0 0"/>
-      <parent link="${parent}"/>
-      <child  link="${suffix}_L_skirt"/>
-    </joint>  
-    <link name="${suffix}_L_skirt">
-      <inertial>
-        <mass value="0.01"/>
-        <inertia ixx="0.01" ixy="0.0" ixz="0.0" 
-                 iyy="0.01" iyz="0.0" 
-                 izz="0.01"/>
-      </inertial>
-      <visual>
-        <geometry><box size="0.001 0.06 0.06"/></geometry>
-        <material name="black"><color rgba="0 0 0 .9"/></material>
-      </visual>
-    </link>
 
     <joint name="${suffix}_R_fender_joint" type="fixed">
-      <origin xyz="-0.06 -0.1 0.08" rpy="1.5707963 0 0"/>
+      <origin xyz="-0.06 -0.09 0.08" rpy="1.5707963 0 0"/>
       <parent link="${parent}"/>
       <child  link="${suffix}_R_fender"/>
     </joint>  
@@ -174,11 +156,11 @@
                  izz="0.01"/>
       </inertial>
       <visual>
-        <geometry><cylinder radius="0.005" length="0.15"/></geometry>
+        <geometry><cylinder radius="0.005" length="0.14"/></geometry>
         <material name="black"><color rgba="0 0 0 .9"/></material>
       </visual>
       <collision name="R_fender_collision">
-        <geometry><cylinder radius="0.005" length="0.15"/></geometry>
+        <geometry><cylinder radius="0.005" length="0.14"/></geometry>
       </collision>
 
       <sensor name='R_fender_sensor' type='contact'>
@@ -193,24 +175,6 @@
         </plugin>
       </sensor>
     </link>
-  
-    <joint name="${suffix}_R_skirt_joint" type="fixed">
-      <origin xyz="-0.06 -0.145 0.045" rpy="0 0 0"/>
-      <parent link="${parent}"/>
-      <child  link="${suffix}_R_skirt"/>
-    </joint>  
-    <link name="${suffix}_R_skirt">
-      <inertial>
-        <mass value="0.01"/>
-        <inertia ixx="0.01" ixy="0.0" ixz="0.0" 
-                 iyy="0.01" iyz="0.0" 
-                 izz="0.01"/>
-      </inertial>
-      <visual>
-        <geometry><box size="0.001 0.06 0.06"/></geometry>
-        <material name="black"><color rgba="0 0 0 .9"/></material>
-      </visual>
-   </link>
 
     <light name='under' type='directional'>
       <cast_shadows>1</cast_shadows>

@@ -734,6 +734,11 @@ void HcPathNode::control(double& throttle, double& curvature) {
 		, kEpsilonSq = kEpsilon * kEpsilon;
 	if (_openControlQ.size()) {
 		const auto& ctrl = _openControlQ.front();
+#if 0
+		if (_openStateQ.size()) {
+			const auto& first = _openStateQ.front();
+		}
+#endif
 		curvature = ctrl.kappa;
 		if (!_gear) { // I use neutral to switch between gears 
 			auto e = ctrl.kappa - _curvature;
@@ -764,6 +769,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 			if (// moved too far past the control endpoint
 				(1 - 2*signbit(ctrl.delta_s)) * es < 0 //-kEpsilon
 				|| (abs(es) < 0.1 && S * first.d < 0) // control in wrong direction
+				|| ctrl.delta_s * first.d < 0// pruned waypoints beyond this control
 				) { 
 				ROS_WARN("Pruning control (%.2f, %.2f, %.2f), "
 						"waypoint (%.0f %.2f, %.2f)"
@@ -820,7 +826,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 		if (first.d * dist1 * cos1 < kCos30Deg * kPathRes) {
 			// waypoint NOT in front of the car
 			ROS_WARN("(%.2f, %.2f) ds %.2f "
-					"(%.3f m, %.2f rad); Pruning way (%.2f, %.2f)"//", %.2f, %.0f"
+					"(%.3f m, %.2f rad); Pruning waypoint on side(%.2f, %.2f)"//", %.2f, %.0f"
 					, _trueFootprintPose[0], _trueFootprintPose[1]//, _2Dpose.T[0], _2Dpose.T[1]
 					, ds, first.d * dist1, theta_e
 					, first.x, first.y // , first.theta, first.d
@@ -897,7 +903,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 		}
 
 		break;
-	} // end throttle and steering calculation
+	} // end throttle and steering calculation using waypoint
 
 	curvature += _Kback_kappa * eKappa + _Kback_intkappa * _eKappaInt
 			+ _Kback_theta * eHeading
