@@ -54,7 +54,7 @@
         <geometry><box size="0.024 0.024 0.024"/></geometry>
       </collision>
 
-    <sensor name='5whl_sensor' type='contact'>
+    <!-- <sensor name='5whl_sensor' type='contact'>
         <pose frame=''>0 0 0.4075  0 0 0</pose>
         <always_on>1</always_on>
         <contact>
@@ -65,7 +65,7 @@
           <bumperTopicName>5whl_contact</bumperTopicName>
           <frameName>5whl</frameName>
         </plugin>
-      </sensor>
+      </sensor> -->
     </link>
     <joint name="${suffix}_5whl_joint2" type="fixed">
       <origin xyz="-0.035 -0.022 0" rpy="0 0 0.2617994" />
