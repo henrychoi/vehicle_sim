@@ -111,7 +111,7 @@ double CC_Dubins_State_Space::get_distance(const State &state1, const State &sta
       else
       {
         double distance = 0.0;
-        if (fabs(start_state.kappa) < get_epsilon())
+        if (false) //fabs(start_state.kappa) < get_epsilon())
         {
           if (fabs(end_state.kappa) < get_epsilon())
             distance += cc00_dubins_state_space_.get_distance(start_state, end_state);
@@ -120,7 +120,7 @@ double CC_Dubins_State_Space::get_distance(const State &state1, const State &sta
         }
         else
         {
-          if (fabs(end_state.kappa) < get_epsilon())
+          if (false) //(fabs(end_state.kappa) < get_epsilon())
             distance += ccpm0_dubins_state_space_.get_distance(start_state, end_state);
           else
             distance += ccpmpm_dubins_state_space_.get_distance(start_state, end_state);
@@ -163,7 +163,7 @@ vector<Control> CC_Dubins_State_Space::get_controls(const State &state1, const S
       // call the appropriate state space
       else
       {
-        if (fabs(start_state.kappa) < get_epsilon())
+        if (false)//(fabs(start_state.kappa) < get_epsilon())
         {
           if (fabs(end_state.kappa) < get_epsilon())
             cc_dubins_controls = cc00_dubins_state_space_.get_controls(start_state, end_state);
@@ -172,7 +172,7 @@ vector<Control> CC_Dubins_State_Space::get_controls(const State &state1, const S
         }
         else
         {
-          if (fabs(end_state.kappa) < get_epsilon())
+          if (false) //(fabs(end_state.kappa) < get_epsilon())
             cc_dubins_controls = ccpm0_dubins_state_space_.get_controls(start_state, end_state);
           else
             cc_dubins_controls = ccpmpm_dubins_state_space_.get_controls(start_state, end_state);

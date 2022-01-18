@@ -462,27 +462,22 @@ bool HcPathNode::heuristic_plan() {
 	if (inParkingState(ParkingState::approaching)) { // recover from collision risk
 		start.d = goal.d = 1; // go forward when recovering
 		goal.x = start.x + _pathSign * backoff;
-		for (goal.y = 0
-			; !ok && lateralDir * goal.y <= backoff
-			; goal.y += 0.25 * lateralDir * backoff) {
-			ROS_INFO("distancing Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
-					, start.x, start.y, start.theta, start.kappa
-					, goal.x, goal.y, goal.theta);
-			ok = Dubins(start, goal, segments, path);
-			if (!ok) {
-				ROS_WARN("Invalid distancing Dubins path generated for lateral %.2f"
-						, goal.y);
-#if 1
-				for (auto seg: segments) {
-					ROS_INFO("Dubins control %.2f, %.2f, %.2f"
-							, seg.delta_s, seg.kappa, seg.sigma);
-					_openControlQ.push_back(seg);
-				}
-#endif
-			}
-		}
+		goal.y = 0;
+		ROS_INFO("distancing Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
+				, start.x, start.y, start.theta, start.kappa
+				, goal.x, goal.y, goal.theta);
+		ok = Dubins(start, goal, segments, path);
 		if (ok) {
 			_parkingState = ParkingState::distancing;				
+		} else {
+			ROS_WARN("Invalid distancing Dubins path");
+#if 1
+			for (auto seg: segments) {
+				ROS_INFO("Dubins control %.2f, %.2f, %.2f"
+						, seg.delta_s, seg.kappa, seg.sigma);
+				_openControlQ.push_back(seg);
+			}
+#endif
 		}
 	} else {// backup into target
 		start.d = goal.d = -1; // go forward when recovering

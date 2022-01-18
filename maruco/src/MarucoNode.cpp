@@ -49,7 +49,7 @@ private:
 	image_transport::Subscriber _quad0sub, _quad1sub, _quad2sub, _quad3sub;
 	void onQuadFrame(const sensor_msgs::ImageConstPtr& msg);
 	ros::Time _marker2QuadTime = ros::Time(0); // to reject redundant pose estimate
-	ros::Duration _mark2QuadTimeout;//(0.2);
+	const ros::Duration _markObsDeadlne;//(0.2);
 	// x, y, for debouncing erroneous reading; assume the vehicle will not go directly
 	// under the trailer (incorrect assumption if vehicle will park under the trailer)
 	double _prevQuadPosition[2] = {0,0};
@@ -109,7 +109,7 @@ private:
 
 	ros::Publisher aruco_tf_strobe_;
 
-	Ptr<aruco::Board> _board;
+	Ptr<aruco::Board> _sideMarkers, _btmMarkers;
 	Ptr<aruco::DetectorParameters> _arucoDetectionParam = aruco::DetectorParameters::create();
 
 	struct _CamState { Vec3d rvec, tvec; } _quadState[4], _monoState;
@@ -134,7 +134,7 @@ Maruco::Maruco()
 , _quad3calSub(_nh.subscribe("/quad3/camera_info", 1 , &Self::onQuadCal, this))
 , _monosub(_it.subscribe("/webcam/image_raw", 1, &Self::onMonoFrame, this))
 , _monoCalSub(_nh.subscribe("/webcam/camera_info", 1 , &Self::onMonoCal, this))
-, _mark2QuadTimeout(0.4)
+, _markObsDeadlne(0.1) // > primary camera 1/FPS
 , _cam2marker_pub(_ph.advertise<geometry_msgs::PoseStamped>("cam2marker", 1, true))
 , _tf2_listener(tf2_buffer_)
 , _tf2_filter(_cam2marker_sub, tf2_buffer_, "quad_link", 10, 0)
@@ -174,10 +174,9 @@ Maruco::Maruco()
   
   	auto dict = aruco::getPredefinedDictionary(aruco::DICT_4X4_250);
 	vector<int> ids;
-	for (auto i=0; i < 2*(6+8) + 16*12; ++i) { // 4 sides + bottom
+	for (auto i=0; i < 2*(6+8); ++i) { // 4 sides
 		ids.push_back(i);
 	}
-
 
 	vector<vector<cv::Point3f>> corners;
 	//front
@@ -296,10 +295,18 @@ Maruco::Maruco()
 					, Point3f(	-0.255,		+0.05	,	-0.374	)
 					, Point3f(	-0.255,		+0.14	,	-0.374	)
 					, Point3f(	-0.255,		+0.14	,	-0.1885)});
-#include "bottom_markers.cpp"
 	assert(ids.size() == corners.size());	
 
-	_board = aruco::Board::create(InputArrayOfArrays(corners), dict, InputArray(ids));
+	_sideMarkers = aruco::Board::create(InputArrayOfArrays(corners), dict, InputArray(ids));
+
+	ids.clear();
+	corners.clear();
+	for (auto i=2*(6+8); i < 2*(6+8) + 12*16; ++i) { // bottom
+		ids.push_back(i);
+	}
+#include "bottom_markers.cpp"
+	assert(ids.size() == corners.size());	
+	_btmMarkers = aruco::Board::create(InputArrayOfArrays(corners), dict, InputArray(ids));
 }
 
 int main(int argc, char **argv) {
@@ -360,13 +367,13 @@ void Maruco::onQuadFrame(const sensor_msgs::ImageConstPtr& msg) {
 		Mat frame = cv_bridge::toCvShare(msg, "mono8")->image;
 		vector<int> markerIds;
 		vector<vector<Point2f>> markerCorners;
-		aruco::detectMarkers(frame, _board->dictionary, markerCorners, markerIds
+		aruco::detectMarkers(frame, _sideMarkers->dictionary, markerCorners, markerIds
 			, _arucoDetectionParam, noArray() //rejectedImgPoints, 
 			, _quadIntrinsic[id], _quadDistortion[id]
 			);
 		Vec3d rvec, tvec;
 		if(markerIds.size() <= 0
-			|| !aruco::estimatePoseBoard(markerCorners, markerIds, _board
+			|| !aruco::estimatePoseBoard(markerCorners, markerIds, _sideMarkers
 					, _quadIntrinsic[id], _quadDistortion[id] //, rvec, tvec
 					, _quadState[id].rvec, _quadState[id].tvec
 					// , cv::SOLVEPNP_P3P
@@ -415,33 +422,7 @@ void Maruco::onQuadFrame(const sensor_msgs::ImageConstPtr& msg) {
 		*/
 		tf2::Quaternion Q(rvec[2] * scale, -rvec[0] * scale, -rvec[1] * scale
 						, cos(0.5f * angle));
-#if 0 // direct broadcast doesn't work for some reason
-		tf2::Vector3 axis = Q.getAxis();
-		double yaw = 0;
-		if (abs(axis[2]) > 0.8) { // rotation axis roughly along vertical
-			// => can assume that the rotation amount is the yaw
-			yaw = Q.getAngle() * (1 - 2*signbit(axis[2]));
-		}
 
-		geometry_msgs::TransformStamped xf;
-		xf.header = msg->header;
-		xf.child_frame_id = "trailer"; // aruco and trailer are coincident
-		xf.transform.translation.x =  tvec[2];
-		xf.transform.translation.y = -tvec[0];
-		xf.transform.translation.z = -tvec[1];
-		xf.transform.rotation.x = 0; //Qave.x();
-		xf.transform.rotation.y = 0; //Qave.y();
-		xf.transform.rotation.z = sin(0.5 * yaw); //Qave.z();
-		xf.transform.rotation.w = cos(0.5 * yaw); //Qave.w();
-		_br.sendTransform(xf);
-		ROS_DEBUG_THROTTLE(1, //"%d.%03u "
-			"trailer <-- quad%i_link = [%.2f, %.2f; (%.2f, %.2f, %.2f), %.2f]"
-			//, xf.header.stamp.sec, xf.header.stamp.nsec/1000000
-			, i, xf.transform.translation.x, xf.transform.translation.y
-			, axis[0], axis[1], axis[2], yaw);
-
-		aruco_tf_strobe_.publish(xf.header);
-#else
 		geometry_msgs::PoseStamped cam2marker;
 		cam2marker.pose.orientation.x = Q.x();
 		cam2marker.pose.orientation.y = Q.y();
@@ -481,7 +462,7 @@ void Maruco::onQuadFrame(const sensor_msgs::ImageConstPtr& msg) {
 			if (_prevQuadPosition[0]) {
 				auto dx = T.x - _prevQuadPosition[0], dy = T.y - _prevQuadPosition[1];
 				if (dx*dx + dy*dy > _wheel_base * _wheel_base
-					&& msg->header.stamp - _marker2QuadTime < _mark2QuadTimeout) {
+					&& msg->header.stamp - _marker2QuadTime < _markObsDeadlne) {
 					ROS_WARN_THROTTLE(1, "Quad estimate outlier; dropping estimate");
 					return;
 				}
@@ -489,6 +470,13 @@ void Maruco::onQuadFrame(const sensor_msgs::ImageConstPtr& msg) {
 			_marker2QuadTime = quad2marker.header.stamp;
 			_prevQuadPosition[0] = T.x; _prevQuadPosition[1] = T.y;
 
+#if 1
+			if (msg->header.stamp - _marker2MonoTime <= _markObsDeadlne) {
+				ROS_DEBUG_THROTTLE(1,
+					"mono estimate is current; skipping backup localization estimate");
+				return;
+			}
+#endif
 			geometry_msgs::TransformStamped xf;
 			xf.header = quad2marker.header;
 			// Assume the vehicle ONLY yaws
@@ -535,7 +523,7 @@ void Maruco::onQuadFrame(const sensor_msgs::ImageConstPtr& msg) {
 		} catch (tf2::TransformException &ex) {
 			ROS_ERROR("quad2 marker transform failure %s\n", ex.what());
 		}
-#endif
+
 		if (_show_axis) { // Show the board frame
 		  	cv::aruco::drawAxis(frame, _quadIntrinsic[id], _quadDistortion[id], rvec, tvec, 0.8);
 			auto img = boost::make_shared<sensor_msgs::Image>();
@@ -558,12 +546,12 @@ void Maruco::onMonoFrame(const sensor_msgs::ImageConstPtr& msg) {
 		Mat frame = cv_bridge::toCvShare(msg, "mono8")->image;
 		vector<int> markerIds;
 		vector<vector<Point2f>> markerCorners;
-		aruco::detectMarkers(frame, _board->dictionary, markerCorners, markerIds
+		aruco::detectMarkers(frame, _btmMarkers->dictionary, markerCorners, markerIds
 			, _arucoDetectionParam, noArray() //rejectedImgPoints, 
 			, _monoIntrinsic, _monoDistortion);
 		Vec3d rvec, tvec;
 		if(markerIds.size() <= 0
-			|| !aruco::estimatePoseBoard(markerCorners, markerIds, _board
+			|| !aruco::estimatePoseBoard(markerCorners, markerIds, _btmMarkers
 					, _monoIntrinsic, _monoDistortion //, rvec, tvec
 					, _monoState.rvec, _monoState.tvec
 					// , cv::SOLVEPNP_P3P// yield wrong answer
@@ -586,43 +574,14 @@ void Maruco::onMonoFrame(const sensor_msgs::ImageConstPtr& msg) {
 				, tvec[0], tvec[1], tvec[2], rvec[0], rvec[1], rvec[2]);
 		tf2::Quaternion Q(rvec[2] * scale, -rvec[0] * scale, -rvec[1] * scale
 						, cos(0.5f * angle));
-
-		if (msg->header.stamp - _marker2QuadTime <= _mark2QuadTimeout) {
+#if 0
+		if (msg->header.stamp - _marker2QuadTime <= _markObsDeadlne) {
 			ROS_DEBUG_THROTTLE(1,
 				"quad estimate is current; skipping backup localization estimate");
 			return;
 		}
-#if 0 // direct broadcast doesn't work for some reason
-		tf2::Vector3 axis = Q.getAxis();
-		double yaw = 0;
-		if (abs(axis[2]) > 0.8) { // rotation axis roughly along vertical
-			// => can assume that the rotation amount is the yaw
-			yaw = Q.getAngle() * (1 - 2*signbit(axis[2]));
-		}
+#endif
 
-		geometry_msgs::TransformStamped xf;
-		xf.header.stamp = msg->header.stamp;
-		xf.header.frame_id = "webcam_link";
-		static uint32_t sSeq = 0;
-		xf.header.seq = ++sSeq;
-		xf.child_frame_id = "trailer"; // aruco and trailer are coincident
-		xf.transform.translation.x =  tvec[2];
-		xf.transform.translation.y = -tvec[0];
-		xf.transform.translation.z = -tvec[1];
-		xf.transform.rotation.x = 0; //Qave.x();
-		xf.transform.rotation.y = 0; //Qave.y();
-		xf.transform.rotation.z = sin(0.5 * yaw); //Qave.z();
-		xf.transform.rotation.w = cos(0.5 * yaw); //Qave.w();
-		_br.sendTransform(xf);
-		_marker2MonoTime = msg->header.stamp;
-
-		ROS_INFO_THROTTLE(1, //"%d.%03u "
-			"trailer <-- base_link = [%.2f, %.2f; (%.2f, %.2f, %.2f), %.2f]"
-			//, xf.header.stamp.sec, xf.header.stamp.nsec/1000000
-			, xf.transform.translation.x, xf.transform.translation.y
-			, axis[0], axis[1], axis[2], yaw);
-		aruco_tf_strobe_.publish(xf.header);
-#else
 		geometry_msgs::PoseStamped cam2marker;
 		cam2marker.pose.orientation.x = Q.x();
 		cam2marker.pose.orientation.y = Q.y();
@@ -682,7 +641,6 @@ void Maruco::onMonoFrame(const sensor_msgs::ImageConstPtr& msg) {
 		} catch (tf2::TransformException &ex) {
 			ROS_ERROR("base_lihk to marker transform failure %s\n", ex.what());
 		}
-#endif
 
 		if (_show_axis) { // Show the board frame
 		  	cv::aruco::drawAxis(frame, _monoIntrinsic, _monoDistortion, rvec, tvec, 0.8);
