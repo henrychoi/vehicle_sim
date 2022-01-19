@@ -390,7 +390,9 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 		ROS_INFO_THROTTLE(1, "Driving to %d, error %.2f, %.2f, %.2f"
 				, _pathSign, e_x, e_y, e_t);
 		static constexpr double kEpsilon = 0.03, kEpsilonSq = kEpsilon * kEpsilon;
-		if (e_t*e_t < kEpsilonSq && e_x*e_x < kEpsilonSq && e_y*e_y < kEpsilonSq) {
+		if (e_x*e_x < kEpsilonSq && e_y*e_y < kEpsilonSq
+		 	// loose heading requirement when docking to the kingpin
+			&& (_pathSign > 0 || e_t*e_t < kEpsilonSq)) {
 			ROS_ERROR("Docked successfully!");
 			_parkingState = ParkingState::idle; _gear = 0;
 			_pathSign = 0;
