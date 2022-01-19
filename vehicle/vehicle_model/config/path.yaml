@@ -1,16 +1,16 @@
 # Check "truck_mo" file in Fusion360.  The width should include rear wheel (+-165)
 footprint:
-  [[ 0.377,  0.13],
-   [-0.076,  0.13],
-   [-0.076, -0.13],
-   [ 0.377, -0.13]]
+  [[ 0.377,  0.17],
+   [-0.076,  0.17],
+   [-0.076, -0.17],
+   [ 0.377, -0.17]]
 
 path:
   safe_distance: 0.01 # [m] insist on minimum distance
   chassis_front:
     [[0.377,  0.255],
-     [0.250,  0.255],
-     [0.250, -0.255],
+     [0.210,  0.255],
+     [0.210, -0.255],
      [0.377, -0.255]]
 
   kappa_max: 1.48 # [1/m]

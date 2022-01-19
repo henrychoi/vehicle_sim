@@ -32,7 +32,8 @@ using namespace hcpath;
 
 class HcPathNode {
 	typedef HcPathNode Self;
-	enum class ParkingState: uint32_t { unsafe = 0x1, stopped = 0x2
+	enum class ParkingState: uint32_t { fail = 0
+		, unsafe = 0x1, stopped = 0x2
 		, idle = 0x10 | static_cast<uint32_t>(stopped)
 		, approaching = 0x20
 			, approaching_unsafe = static_cast<uint32_t>(approaching)
@@ -373,7 +374,10 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 		tf2::Quaternion Q;
 		tf2::fromMsg(xform.transform.rotation, Q);
 		tf2::Vector3 axis = Q.getAxis();
-		tf2Scalar angle = Q.getAngle() * (1 - 2*signbit(axis[2]));// Account for the axis sign
+		// Account for the axis sign
+		tf2Scalar angle = //pify(
+			Q.getAngle() * (1 - 2*signbit(axis[2]))//)
+			;
 		_2Dpose = { // assume the received pose is roughly vertical
 			.heading = polar(1., angle), .yaw = angle 
 			, .T = { xform.transform.translation.x
@@ -414,7 +418,7 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 			if (heuristic_plan()) {
 				_gear = 0; // put into N to get going
 			} else { // give up
-				_parkingState = ParkingState::idle;
+				_parkingState = ParkingState::fail;
 				_gear = -128; // non-recoverable failure
 			}
 		}
@@ -454,28 +458,48 @@ bool HcPathNode::heuristic_plan() {
 
 	// trailer half-width = 0.375; kingpin under the trailer, at 0.27, side hitch at -0.27
 	// static constexpr double kKingpinOffset = 0.10;
-	State goal = {
-		.theta = M_PI * signbit(_pathSign) // 0 or pi
-		, .kappa = 0
-		// , .d = -1 // this demo just backs up to both kingpin and hitch
-	} , start = { // path planner pose is always relative to the trailer
+	State start = { // path planner pose is always relative to the trailer
 		.x = _2Dpose.T[0], .y = _2Dpose.T[1], .theta = _2Dpose.yaw
 		, .kappa = _curvature // the current curvature
-		// , .d = -1 // assume we are in R for the demo
+		, .d = -1 // backing up by default
 	};
 
 	auto lateralDir = 1 - 2*signbit(_2Dpose.T[1]);
 	// static constexpr double kFallbackDistanceWheelbaseFactor = 3;
+	State goal = { //.theta = M_PI * signbit(_pathSign), // 0 or pi
+		.y = 0, .kappa = 0
+		, .d = -1 // this demo just backs up to both kingpin and hitch
+	};
+	// double nominalGoal;
+	if (_pathSign > 0) { // dock to the front
+		goal.x = _xform2kingpin.transform.translation.x
+				// have to go a bit farther for the 5th wheel to reach the kingpin
+				- _xform2fifth.transform.translation.x;
+		goal.theta = 0;
+	} else { // dock to the back
+		goal.x = _xform2hitch.transform.translation.x
+				// have to go a bit farther for the side hitch to reach the pylons
+				+ _xform2fifth.transform.translation.x;
+		goal.theta = M_PI;
+	}
 	auto backoff = abs(_2Dpose.T[1])
 			// heuristic: if initial heading far off from straight,
 			// aim farther away from the target
 			+ (abs(pify(goal.theta - _2Dpose.yaw)) + 1) * _wheel_base;
 
-	if (inParkingState(ParkingState::approaching)) { // recover from collision risk
+	if (inParkingState(ParkingState::approaching)
+		|| _pathSign * (start.x - goal.x) < _wheel_base
+		) { // too close; move away
 		start.d = goal.d = 1; // go forward when recovering
-		goal.y = 0;
-		for ( ; !ok && backoff < 5 * _wheel_base; backoff += _wheel_base) {
-			goal.x = start.x + _pathSign * backoff; 
+		for ( ; !ok && backoff < 10 * _wheel_base; backoff += _wheel_base) {
+			goal.x = start.x + _pathSign * backoff;
+			goal.y = -lateralDir * 0.1 * backoff;
+			if (_pathSign > 0) {
+				goal.theta = goal.y;
+			} else {
+				goal.theta = pify(M_PI - goal.y);
+			}
+			goal.kappa = (1 - signbit(goal.y)) * _kappa_max;
 			ROS_INFO("distancing Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
 					, start.x, start.y, start.theta, start.kappa
 					, goal.x, goal.y, goal.theta);
@@ -496,65 +520,39 @@ bool HcPathNode::heuristic_plan() {
 			_parkingState = ParkingState::distancing;				
 		}
 	} else {// backup into target
-		start.d = goal.d = -1; // go forward when recovering
-		double angleFromTarget;
-		if (_pathSign > 0) { // dock to the front
-			auto nominal = _xform2kingpin.transform.translation.x
-			 			// have to go a bit farther for the 5th wheel to reach the kingpin
-						- _xform2fifth.transform.translation.x;
-			goal.x = nominal
-				+ 0.5 * (abs(_2Dpose.T[1])
-				// heuristic: if initial heading far off from straight, aim farther
-				// away from the target
-						+ abs(pify(goal.theta - _2Dpose.yaw)) * _wheel_base);
-			angleFromTarget = abs(atan2(start.y, start.x - nominal));
-			// goal.theta = 0;
-		} else { // dock to the back
-			auto nominal = _xform2hitch.transform.translation.x
-			 			// have to go a bit farther for the side hitch to reach the pylons
-						+ _xform2fifth.transform.translation.x;
-			goal.x = nominal
-				- 0.5 * (abs(_2Dpose.T[1])
-						+ abs(pify(goal.theta - _2Dpose.yaw)) * _wheel_base);
-			angleFromTarget = abs(atan2(start.y, nominal - start.x));
-			// goal.theta = M_PI;
-		}
-		static constexpr double kPossibleApproachConeAngle = 0.5; // ~30 deg
-		if (angleFromTarget*angleFromTarget
-				< kPossibleApproachConeAngle*kPossibleApproachConeAngle) {
-			ROS_INFO("approaching Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
-					, start.x, start.y, start.theta, start.kappa
-					, goal.x, goal.y, goal.theta);
-			ok = Dubins(start, goal, segments, path);
-			if (!ok) {
-				ROS_WARN("Invalid approaching Dubins generated");
-#if 1
-				for (auto seg: segments) {
-					ROS_INFO("Dubins control %.2f, %.2f, %.2f"
-							, seg.delta_s, seg.kappa, seg.sigma);
-					_openControlQ.push_back(seg);
-				}
-#endif
-			}
-		}
-		// outside single-pass cone
-		for (goal.y = 0
-			; !ok && lateralDir * goal.y <= backoff
-			; goal.y += 0.25 * lateralDir * backoff) {
-			// can't drive straight to the target drive to the recovery position instead
-			// heuristic based recovery planner
-			// move away from the trailer
-			ROS_WARN("RS path request [%.2f, %.2f, %.2f] %.2f --> [%.2f, %.2f]"
-					, start.x, start.y, start.theta, angleFromTarget, goal.x, goal.y);
-			ok = RSpmpm(start, goal, segments, path);
-		}
+		ROS_INFO("approaching Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
+				, start.x, start.y, start.theta, start.kappa
+				, goal.x, goal.y, goal.theta);
+		ok = Dubins(start, goal, segments, path);
+		if (ok) goto done_planning;
 
+		ROS_WARN("RS path request [%.2f, %.2f, %.2f] --> [%.2f, %.2f]"
+				, start.x, start.y, start.theta, goal.x, goal.y);
+		ok = RSpmpm(start, goal, segments, path);
+		if (ok) goto done_planning;
+
+		goal.x += _pathSign * 0.5
+				* (abs(_2Dpose.T[1])
+					// heuristic: if initial heading far off from straight, aim farther
+					// away from the target
+						+ abs(pify(goal.theta - _2Dpose.yaw)) * _wheel_base);
+		ROS_INFO("approaching Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
+				, start.x, start.y, start.theta, start.kappa
+				, goal.x, goal.y, goal.theta);
+		ok = Dubins(start, goal, segments, path);
+		if (ok) goto done_planning;
+
+		ROS_WARN("RS path request [%.2f, %.2f, %.2f] --> [%.2f, %.2f]"
+				, start.x, start.y, start.theta, goal.x, goal.y);
+		ok = RSpmpm(start, goal, segments, path);
+		if (ok) goto done_planning;
+
+done_planning:
 		if (ok) {
 			_parkingState = ParkingState::approaching;				
 		}
 	} 
-
-	auto elapsed = ros::Time::now() - t0;
+	// auto elapsed = ros::Time::now() - t0;
 	// ROS_WARN("Path planning took %u nsec", elapsed.nsec);
 	if (ok) {
 		_openControlQ.clear(); _openStateQ.clear();
@@ -886,11 +884,14 @@ void HcPathNode::control(double& throttle, double& curvature) {
 		throttle += _Kback_axial * eAxial + _Kback_intaxial * _eKappaInt;
 		_eAxialInt = clamp(_eAxialInt + eAxial, -kMaxThrottle, +kMaxThrottle);
 		ROS_INFO_THROTTLE(0.25
-				, "(%.2f, %.2f) gear %d, ds %.2f error %.2f = %.2f; %.2f, %.2f, %.2f = %.2f"
-				, _trueFootprintPose[0], _trueFootprintPose[1]//, _2Dpose.T[0], _2Dpose.T[1]
+				, "(%.2f, %.2f, %.2f) gear %d, ds %.2f control (%.2f, %.2f)"
+				, _trueFootprintPose[0], _trueFootprintPose[1], _trueFootprintPose[2]
+				//, _2Dpose.T[0], _2Dpose.T[1]
 				, _gear, ds
-				, eAxial, throttle
-				, eLateral, eHeading, eKappa, curvature);
+				// , eAxial
+				, throttle
+				// , eLateral, eHeading, eKappa
+				, curvature);
 		// visualize actual path
 		if (_actual_path.poses.size()) {
 			const auto& last = _actual_path.poses.back();
@@ -961,7 +962,9 @@ void HcPathNode::onGazeboLinkStates(const gazebo_msgs::LinkStates &links) {
 	// rotation FROM trailer TO the base_link
 	const auto Q = Qlink * Qtrailer.inverse();
 	tf2::Vector3 axis = Q.getAxis();
-	_trueFootprintPose[2] = Q.getAngle() * (1 - 2*signbit(axis[2]));
+	_trueFootprintPose[2] = //pify(
+		Q.getAngle() * (1 - 2*signbit(axis[2]))//);
+		;
 #endif
 	_trueFootprintPose[0] = tp_link.position.x - tp_trailer.position.x;
 	_trueFootprintPose[1] = tp_link.position.y - tp_trailer.position.y;

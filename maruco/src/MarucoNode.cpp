@@ -57,6 +57,7 @@ private:
 	image_transport::Subscriber _monosub;
 	void onMonoFrame(const sensor_msgs::ImageConstPtr& msg);
 	ros::Time _marker2MonoTime = ros::Time(0);
+	double _prevMonoPosition[2] = {0,0};
 
 	ros::Subscriber _quad0calSub, _quad1calSub, _quad2calSub, _quad3calSub;
 	void onQuadCal(const sensor_msgs::CameraInfo &msg) {
@@ -610,6 +611,17 @@ void Maruco::onMonoFrame(const sensor_msgs::ImageConstPtr& msg) {
 			);
 
 			auto T = base2marker.pose.position;
+			if (_prevMonoPosition[0]) {
+				auto dx = T.x - _prevMonoPosition[0], dy = T.y - _prevMonoPosition[1];
+				if (dx*dx + dy*dy > _wheel_base * _wheel_base
+					&& msg->header.stamp - _marker2QuadTime < _markObsDeadlne) {
+					ROS_WARN_THROTTLE(1, "Quad estimate outlier; dropping estimate");
+					return;
+				}
+			}
+			_marker2MonoTime = cam2marker.header.stamp;
+			_prevMonoPosition[0] = T.x; _prevMonoPosition[1] = T.y;
+
 			geometry_msgs::TransformStamped xf;
 			xf.header = base2marker.header;
 			// Assume the vehicle ONLY yaws
@@ -629,7 +641,6 @@ void Maruco::onMonoFrame(const sensor_msgs::ImageConstPtr& msg) {
 			xf.transform.rotation.z = sin(0.5 * yaw); //Qave.z();
 			xf.transform.rotation.w = cos(0.5 * yaw); //Qave.w();
 			_br.sendTransform(xf);
-			_marker2MonoTime = msg->header.stamp;
 
 			ROS_DEBUG(//"%d.%03u "
 				"trailer <-- base_link = [%.2f, %.2f; (%.2f, %.2f, %.2f), %.2f]"
