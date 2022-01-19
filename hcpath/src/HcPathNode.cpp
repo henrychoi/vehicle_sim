@@ -82,41 +82,7 @@ class HcPathNode {
 		return true;
 	}
 
-	float dist2trailer(float x, float y, float yaw) {
-		static constexpr float kLegHalfBase = .27f // @see KUEparking world leg1 pose
-			, kLegHalfWidth = .23f
-			, kLegRadius = 0.02f;
-		static constexpr c2AABB kLegAABB[4] = { // legs are modeled as tall boxes
-			{ { kLegHalfBase - kLegRadius,  kLegHalfWidth - kLegRadius} // leg1
-			, { kLegHalfBase + kLegRadius,  kLegHalfWidth + kLegRadius} },
-			{ { kLegHalfBase - kLegRadius, -kLegHalfWidth - kLegRadius} // leg2
-			, { kLegHalfBase + kLegRadius, -kLegHalfWidth + kLegRadius} },
-			{ {-kLegHalfBase - kLegRadius,  kLegHalfWidth - kLegRadius} // leg3
-			, {-kLegHalfBase + kLegRadius,  kLegHalfWidth + kLegRadius} },
-			{ {-kLegHalfBase - kLegRadius, -kLegHalfWidth - kLegRadius} // leg4
-			, {-kLegHalfBase + kLegRadius, -kLegHalfWidth + kLegRadius} }
-		};
-		float minDist = numeric_limits<float>::max();
-		// check for collision, at (x +- 3tau_x, y +- 3tau_y, theta +- 3tau_theta):
-		// 8 transforms of the nominal footprint
-		// TODO: consider varying x and y
-		c2x xform;
-		xform.p.x = x; xform.p.y = y;
-		xform.r.c = cos(yaw); xform.r.s = sin(yaw);
-		for (unsigned l=0; l < sizeof(kLegAABB)/sizeof(kLegAABB[0]); ++l) {
-			auto dist = c2GJK(&kLegAABB[l], C2_TYPE_AABB, NULL
-							, &_footprintPoly, C2_TYPE_POLY, &xform
-							, NULL, NULL, true, NULL, &_gjkCache[l]);
-			if (dist <= 0) { // collision!
-				ROS_DEBUG("collision against leg %u at yaw %.2f", l, yaw);
-			} else {
-				ROS_DEBUG("distance %.2f to leg %u at yaw %.2f", dist, l, yaw);
-			}
-			minDist = min(minDist, dist);
-		}
-		return minDist;
-	}
-
+	float dist2trailer(float x, float y, float yaw);
     ros::NodeHandle _nh, ph_;
 	ros::Publisher _planned_pub, _path_pub, _rw_pub, _lw_pub, _rd_pub, _ld_pub;
 
@@ -170,8 +136,9 @@ class HcPathNode {
 		, _wheel_radius, _wheel_width;
 	geometry_msgs::Point _wheel_fl_pos, _wheel_fr_pos;
 	// vector<geometry_msgs::Point> _footprint, _wheel;
-	c2Poly _footprintPoly, _wheelPoly;//_chassisFrontPoly, _chassisBackPoly;
-	c2GJKCache _gjkCache[4] = { {.count=0}, {.count=0}, {.count=0}, {.count=0} };
+	c2Poly _footprintPoly, _wheelPoly, _chassisFrontPoly;// _chassisBackPoly;
+	c2GJKCache _gjkCacheF[4] = { {.count=0}, {.count=0}, {.count=0}, {.count=0} }
+			, _gjkCacheB[4] = { {.count=0}, {.count=0}, {.count=0}, {.count=0} };
 	float _dist2Trailer = numeric_limits<float>::max();
 
 	struct SimplePose_ { complex<tf2Scalar> heading; tf2Scalar yaw; tf2Scalar T[3]; }
@@ -283,6 +250,19 @@ HcPathNode::HcPathNode()
     _wheelPoly.verts[2].x = -_wheel_radius; _wheelPoly.verts[2].y = -0.5 * _wheel_width;
     _wheelPoly.verts[3].x =  _wheel_radius; _wheelPoly.verts[3].y = -0.5 * _wheel_width;
 	c2MakePoly(&_wheelPoly);
+
+ 	XmlRpc::XmlRpcValue xmlFront;
+	assert(_nh.getParam("/path/chassis_front", xmlFront));
+	auto chassisFront = costmap_2d::makeFootprintFromXMLRPC(xmlFront
+			, "/path/chassis_front");// full param name is only for debugging
+	assert(chassisFront.size());
+	_chassisFrontPoly.count = chassisFront.size();
+	for (auto i=0; i < _chassisFrontPoly.count; ++i) { // geometry_msgs::Point
+		_chassisFrontPoly.verts[i].x = chassisFront[i].x;
+		_chassisFrontPoly.verts[i].y = chassisFront[i].y;
+	}
+	c2MakePoly(&_chassisFrontPoly);
+
 #else
     geometry_msgs::Point point1, point2, point3, point4;
     point1.x =  _wheel_radius; point1.y =  0.5 * _wheel_width;
@@ -294,23 +274,8 @@ HcPathNode::HcPathNode()
     _wheel.push_back(point3);
     _wheel.push_back(point4);
 
- 	XmlRpc::XmlRpcValue xmlFront, xmlBack;
-	assert(_nh.getParam("/path/chassis_front", xmlFront));
 	assert(_nh.getParam("/path/chassis_back", xmlBack));
-
-	auto chassisFront = costmap_2d::makeFootprintFromXMLRPC(xmlFront
-			, "/path/chassis_front") // full param name is only for debugging
-		, chassisBack = costmap_2d::makeFootprintFromXMLRPC(xmlBack
-			, "/path/chassis_back");
-	assert(chassisFront.size());
 	assert(chassisBack.size());
-	_chassisFrontPoly.count = chassisFront.size();
-	for (auto i=0; i < _chassisFrontPoly.count; ++i) { // geometry_msgs::Point
-		_chassisFrontPoly.verts[i].x = chassisFront[i].x;
-		_chassisFrontPoly.verts[i].y = chassisFront[i].y;
-	}
-	c2MakePoly(&_chassisFrontPoly);
-
 	_chassisBackPoly.count = chassisBack.size();
 	for (auto i=0; i < _chassisBackPoly.count; ++i) {
 		_chassisBackPoly.verts[i].x = chassisBack[i].x;
@@ -322,6 +287,51 @@ HcPathNode::HcPathNode()
 	as_.registerGoalCallback(boost::bind(&Self::onGoal, this));
     as_.start();//start() should be called after construction of the server
 }
+
+float HcPathNode::dist2trailer(float x, float y, float yaw) {
+	static constexpr float kLegHalfBase = .27f // @see KUEparking world leg1 pose
+		, kLegHalfWidth = .23f
+		, kLegRadius = 0.02f;
+	static constexpr c2AABB kLegAABB[4] = { // legs are modeled as tall boxes
+		{ { kLegHalfBase - kLegRadius,  kLegHalfWidth - kLegRadius} // leg1
+		, { kLegHalfBase + kLegRadius,  kLegHalfWidth + kLegRadius} },
+		{ { kLegHalfBase - kLegRadius, -kLegHalfWidth - kLegRadius} // leg2
+		, { kLegHalfBase + kLegRadius, -kLegHalfWidth + kLegRadius} },
+		{ {-kLegHalfBase - kLegRadius,  kLegHalfWidth - kLegRadius} // leg3
+		, {-kLegHalfBase + kLegRadius,  kLegHalfWidth + kLegRadius} },
+		{ {-kLegHalfBase - kLegRadius, -kLegHalfWidth - kLegRadius} // leg4
+		, {-kLegHalfBase + kLegRadius, -kLegHalfWidth + kLegRadius} }
+	};
+	float minDist = numeric_limits<float>::max();
+	// check for collision, at (x +- 3tau_x, y +- 3tau_y, theta +- 3tau_theta):
+	// 8 transforms of the nominal footprint
+	// TODO: consider varying x and y
+	c2x xform;
+	xform.p.x = x; xform.p.y = y;
+	xform.r.c = cos(yaw); xform.r.s = sin(yaw);
+	for (unsigned l=0; l < sizeof(kLegAABB)/sizeof(kLegAABB[0]); ++l) {
+		auto distF = c2GJK(&kLegAABB[l], C2_TYPE_AABB, NULL
+						, &_chassisFrontPoly, C2_TYPE_POLY, &xform
+						, NULL, NULL, true, NULL, &_gjkCacheF[l]);
+		if (distF <= 0) { // collision!
+			ROS_DEBUG("front collision against leg %u at yaw %.2f", l, yaw);
+		} else {
+			ROS_DEBUG("front distance %.2f to leg %u at yaw %.2f", distF, l, yaw);
+		}
+		auto distB = c2GJK(&kLegAABB[l], C2_TYPE_AABB, NULL
+						, &_footprintPoly, C2_TYPE_POLY, &xform
+						, NULL, NULL, true, NULL, &_gjkCacheB[l]);
+		if (distB <= 0) { // collision!
+			ROS_DEBUG("center collision against leg %u at yaw %.2f", l, yaw);
+		} else {
+			ROS_DEBUG("center distance %.2f to leg %u at yaw %.2f", distB, l, yaw);
+		}
+		auto dist = min(distF, distB);
+		minDist = min(minDist, dist);
+	}
+	return minDist;
+}
+
 
 // should fire at FPS Hz
 void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
