@@ -20,7 +20,7 @@ path:
   wheel_base:   0.267  # [m]
   track_width:  0.484  # [m]
   wheel_radius: 0.060  # [m]
-  wheel_width:  0.042  # [m]
+  wheel_width:  0.035  # [m]
   rear_track_width: 0.303  # [m]
 
   controller: {k1: 1.5, k2: 0.25, k3: 1.0}

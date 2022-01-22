@@ -375,9 +375,7 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 		tf2::fromMsg(xform.transform.rotation, Q);
 		tf2::Vector3 axis = Q.getAxis();
 		// Account for the axis sign
-		tf2Scalar angle = //pify(
-			Q.getAngle() * (1 - 2*signbit(axis[2]))//)
-			;
+		tf2Scalar angle = pify(Q.getAngle() * (1 - 2*signbit(axis[2])));
 		_2Dpose = { // assume the received pose is roughly vertical
 			.heading = polar(1., angle), .yaw = angle 
 			, .T = { xform.transform.translation.x
@@ -471,21 +469,19 @@ bool HcPathNode::heuristic_plan() {
 		, .d = -1 // this demo just backs up to both kingpin and hitch
 	};
 	// double nominalGoal;
-	if (_pathSign > 0) { // dock to the front
-		goal.x = _xform2kingpin.transform.translation.x
-				// have to go a bit farther for the 5th wheel to reach the kingpin
-				- _xform2fifth.transform.translation.x;
-		goal.theta = 0;
-	} else { // dock to the back
-		goal.x = _xform2hitch.transform.translation.x
-				// have to go a bit farther for the side hitch to reach the pylons
-				+ _xform2fifth.transform.translation.x;
-		goal.theta = M_PI;
-	}
-	auto backoff = abs(_2Dpose.T[1])
+	goal.theta = _pathSign > 0 ? 0 : M_PI;
+	auto backoff = 0.5 * abs(_2Dpose.T[1])
 			// heuristic: if initial heading far off from straight,
 			// aim farther away from the target
-			+ (abs(pify(goal.theta - _2Dpose.yaw)) + 1) * _wheel_base;
+			+ abs(pify(goal.theta - _2Dpose.yaw)) * _wheel_base;
+	goal.x = _pathSign > 0
+		? _xform2kingpin.transform.translation.x
+			- _xform2fifth.transform.translation.x// go a bit farther to reach the kingpin
+			+ backoff
+		: _xform2hitch.transform.translation.x
+			+ _xform2fifth.transform.translation.x// go farther to reach the pylons
+			- backoff
+		;
 
 	if (inParkingState(ParkingState::approaching)
 		|| _pathSign * (start.x - goal.x) < _wheel_base
@@ -493,60 +489,38 @@ bool HcPathNode::heuristic_plan() {
 		start.d = goal.d = 1; // go forward when recovering
 		for ( ; !ok && backoff < 10 * _wheel_base; backoff += _wheel_base) {
 			goal.x = start.x + _pathSign * backoff;
-			goal.y = -lateralDir * 0.1 * backoff;
-			if (_pathSign > 0) {
-				goal.theta = goal.y;
-			} else {
-				goal.theta = pify(M_PI - goal.y);
-			}
 			goal.kappa = (1 - signbit(goal.y)) * _kappa_max;
-			ROS_INFO("distancing Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
-					, start.x, start.y, start.theta, start.kappa
-					, goal.x, goal.y, goal.theta);
-			ok = Dubins(start, goal, segments, path);
-			if (!ok) {
-				ROS_WARN("Invalid distancing Dubins path generated for backoff %.2f"
-						, backoff);
-#if 0
-				for (auto seg: segments) {
-					ROS_INFO("Dubins control %.2f, %.2f, %.2f"
-							, seg.delta_s, seg.kappa, seg.sigma);
-					_openControlQ.push_back(seg);
+			for (auto lateral=0.; !ok && lateral < 0.5*backoff; lateral += 0.1*backoff) {
+				goal.y = -lateralDir * lateral;
+				goal.theta = _pathSign > 0 ? goal.y : pify(M_PI - goal.y);
+				ok = Dubins(start, goal, segments, path);
+				if (!ok) {
+					ROS_WARN("No Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f, %.2f]"
+							, start.x, start.y, start.theta, start.kappa
+							, goal.x, goal.y, goal.theta, goal.kappa);
 				}
-#endif
 			}
 		}
 		if (ok) {
 			_parkingState = ParkingState::distancing;				
 		}
 	} else {// backup into target
-		ROS_INFO("approaching Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
-				, start.x, start.y, start.theta, start.kappa
-				, goal.x, goal.y, goal.theta);
 		ok = Dubins(start, goal, segments, path);
 		if (ok) goto done_planning;
-
-		ROS_WARN("RS path request [%.2f, %.2f, %.2f] --> [%.2f, %.2f]"
-				, start.x, start.y, start.theta, goal.x, goal.y);
-		ok = RSpmpm(start, goal, segments, path);
-		if (ok) goto done_planning;
-
-		goal.x += _pathSign * 0.5
-				* (abs(_2Dpose.T[1])
-					// heuristic: if initial heading far off from straight, aim farther
-					// away from the target
-						+ abs(pify(goal.theta - _2Dpose.yaw)) * _wheel_base);
-		ROS_INFO("approaching Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
+		ROS_INFO("No approaching Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
 				, start.x, start.y, start.theta, start.kappa
 				, goal.x, goal.y, goal.theta);
-		ok = Dubins(start, goal, segments, path);
-		if (ok) goto done_planning;
 
-		ROS_WARN("RS path request [%.2f, %.2f, %.2f] --> [%.2f, %.2f]"
-				, start.x, start.y, start.theta, goal.x, goal.y);
 		ok = RSpmpm(start, goal, segments, path);
 		if (ok) goto done_planning;
+		ROS_WARN("No approaching RS path [%.2f, %.2f, %.2f] --> [%.2f, %.2f]"
+				, start.x, start.y, start.theta, goal.x, goal.y);
 
+		goal.x += _pathSign * backoff;
+		ok = RSpmpm(start, goal, segments, path);
+		if (ok) goto done_planning;
+		ROS_WARN("No approaching RS path [%.2f, %.2f, %.2f] --> [%.2f, %.2f]"
+				, start.x, start.y, start.theta, goal.x, goal.y);
 done_planning:
 		if (ok) {
 			_parkingState = ParkingState::approaching;				
