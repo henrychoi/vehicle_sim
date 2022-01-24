@@ -454,21 +454,16 @@ bool HcPathNode::heuristic_plan() {
 	vector<State> path;
 	vector<Control> segments;
 
-	// trailer half-width = 0.375; kingpin under the trailer, at 0.27, side hitch at -0.27
-	// static constexpr double kKingpinOffset = 0.10;
+	auto lateralDir = 1 - 2*signbit(_2Dpose.T[1]); // am I on the L or R side of trailer?
 	State start = { // path planner pose is always relative to the trailer
 		.x = _2Dpose.T[0], .y = _2Dpose.T[1], .theta = _2Dpose.yaw
 		, .kappa = _curvature // the current curvature
 		, .d = -1 // backing up by default
 	};
-
-	auto lateralDir = 1 - 2*signbit(_2Dpose.T[1]);
-	// static constexpr double kFallbackDistanceWheelbaseFactor = 3;
 	State goal = { //.theta = M_PI * signbit(_pathSign), // 0 or pi
 		.y = 0, .kappa = 0
 		, .d = -1 // this demo just backs up to both kingpin and hitch
 	};
-	// double nominalGoal;
 	goal.theta = _pathSign > 0 ? 0 : M_PI;
 	auto backoff = 0.5 * abs(_2Dpose.T[1])
 			// heuristic: if initial heading far off from straight,
@@ -484,8 +479,73 @@ bool HcPathNode::heuristic_plan() {
 		;
 
 	if (inParkingState(ParkingState::approaching)
-		|| _pathSign * (start.x - goal.x) < _wheel_base
-		) { // too close; move away
+		|| _pathSign * (start.x - goal.x) < _wheel_base) { // too close; move away
+#if 1
+		// just drive to toward y=0 (trailer center line)
+		// @see https://docs.google.com/document/d/13Mn3p75zZXQYXpwDJOEeD26kr2TT-mhuMjfdoP6-Ll8/edit#bookmark=id.yy5jjshplmk1
+		double kappa, R, x_c, y_c;
+		for (kappa = _kappa_max; kappa > 0; kappa -= 0.2) {
+			R = 1/kappa;
+			auto sthetas = sin(start.theta), cthetas = cos(start.theta);
+			// center of turning circle
+			x_c = start.x + _pathSign * R*sthetas;
+			y_c = start.y - _pathSign * R*cthetas;
+			// sin = sqrt(1 - cos^2); cos(theta_f) = ctheta - start.y * kappa
+			auto arg = sthetas*sthetas - start.y*start.y*kappa*kappa
+					+ _pathSign * 2*start.y*cthetas*kappa;
+			if (arg < 0) {
+				ROS_ERROR("Can't solve for distancing theta_f @(%.2f, %.2f, %.2f), %.2f"
+						, start.x, start.y, start.theta, kappa);
+				continue;
+			}
+			// xf - xs = +/-R (sin[theta] + sin[theta_f])
+			auto sthetaf = sqrt(arg);
+			// goal.x should be farther away than kingpin (side hitch)
+			if (_pathSign > 0) {
+				goal.x = start.x + R * (sthetas + sthetaf); //goal.y = 0;
+				if (goal.x > _xform2kingpin.transform.translation.x) { // valid
+					goal.theta = asin(sthetaf);
+					break; // far enough away
+				}
+			} else {
+				goal.x = start.x - R * (sthetas + sthetaf); //goal.y = 0;
+				if (goal.x < _xform2hitch.transform.translation.x) {
+					goal.theta = asin(sthetaf) + M_PI;
+					break; // far enough away
+				}
+			}
+			// goal position too close to the trailer; try a larger radius
+		} // end for(kappa)
+		if (kappa < 0) {
+			ROS_ERROR("Pure circle path not found for start=(%.2f, %.2f, %.2f)"
+					, start.x, start.y, start.theta);
+			return false;
+		}
+		ROS_WARN("Pure circle path from %.2f found for kappa %.2f, goal x,theta %.2f, %.2f"
+				, start.theta, kappa, goal.x, goal.theta);
+		auto dTheta = pify(goal.theta - start.theta);
+		auto thetaSign = 1 - signbit(dTheta);
+		segments.push_back({
+			.delta_s = +R * thetaSign * dTheta, .kappa = thetaSign * kappa, .sigma = 0
+		});
+		// generate the poses
+		path.push_back({
+			.x = start.x, .y = start.y, .theta = start.theta
+			, .kappa = thetaSign * kappa, .d = 1
+		});
+		auto thetaRes = thetaSign * kPathRes * kappa; 
+		for (auto theta=start.theta+thetaRes; theta < goal.theta; theta += thetaRes) {
+			auto stheta = sin(theta), ctheta = cos(theta);
+			path.push_back({
+				.x = x_c - _pathSign * R * stheta, .y = y_c + _pathSign * R * ctheta
+				, .theta = theta, .kappa = kappa, .d = 1
+			});
+		}
+		path.push_back({
+			.x = goal.x, .y = 0, .theta = goal.theta, .kappa = kappa, .d = 1
+		});
+		ok = true;
+#else
 		start.d = goal.d = 1; // go forward when recovering
 		for ( ; !ok && backoff < 10 * _wheel_base; backoff += _wheel_base) {
 			goal.x = start.x + _pathSign * backoff;
@@ -501,10 +561,12 @@ bool HcPathNode::heuristic_plan() {
 				}
 			}
 		}
+#endif
 		if (ok) {
 			_parkingState = ParkingState::distancing;				
 		}
 	} else {// backup into target
+
 		ok = Dubins(start, goal, segments, path);
 		if (ok) goto done_planning;
 		ROS_INFO("No approaching Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
