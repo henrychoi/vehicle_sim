@@ -70,7 +70,7 @@
       <static>true</static>
     </model>
 
-    <gui>
+    <!-- <gui>
       <camera name="chase_cam">
         <track_visual>
           <name>trailer</name>
@@ -79,7 +79,7 @@
           <xyz>0 0 -2.5</xyz>
         </track_visual>
       </camera>
-    </gui>
+    </gui> -->
 
     <joint name="trailer_joint" type="fixed">
       <parent>ground_link</parent>
@@ -145,6 +145,14 @@
             <emissive>0 0 0 0</emissive>
           </material>
         </visual>
+         <sensor name="contact_sensor" type="contact" >
+        <update_Rate>10</update_Rate>
+        <always_on>true</always_on> 
+        <contact>
+          <collision>kingpin_collision</collision>
+          <topic>/contact</topic> 
+        </contact>
+        </sensor>
       </link>
 
       <joint name="hitch_center_joint" type="fixed">
