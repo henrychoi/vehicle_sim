@@ -110,7 +110,7 @@ private:
 
 	ros::Publisher aruco_tf_strobe_;
 
-	Ptr<aruco::Board> _sideMarkers, _btmMarkers;
+	Ptr<aruco::Board> _markers, _btmMarkers;
 	Ptr<aruco::DetectorParameters> _arucoDetectionParam = aruco::DetectorParameters::create();
 
 	struct _CamState { Vec3d rvec, tvec; } _quadState[4], _monoState;
@@ -175,7 +175,7 @@ Maruco::Maruco()
   
   	auto dict = aruco::getPredefinedDictionary(aruco::DICT_4X4_250);
 	vector<int> ids;
-	for (auto i=0; i < 2*(6+8); ++i) { // 4 sides
+	for (auto i=0; i < 2*(6+8) + 12*16; ++i) { // 4 sides
 		ids.push_back(i);
 	}
 
@@ -296,9 +296,9 @@ Maruco::Maruco()
 					, Point3f(	-0.255,		+0.05	,	-0.374	)
 					, Point3f(	-0.255,		+0.14	,	-0.374	)
 					, Point3f(	-0.255,		+0.14	,	-0.1885)});
+#include "bottom_markers.cpp"
 	assert(ids.size() == corners.size());	
-
-	_sideMarkers = aruco::Board::create(InputArrayOfArrays(corners), dict, InputArray(ids));
+	_markers = aruco::Board::create(InputArrayOfArrays(corners), dict, InputArray(ids));
 
 	ids.clear();
 	corners.clear();
@@ -368,13 +368,13 @@ void Maruco::onQuadFrame(const sensor_msgs::ImageConstPtr& msg) {
 		Mat frame = cv_bridge::toCvShare(msg, "mono8")->image;
 		vector<int> markerIds;
 		vector<vector<Point2f>> markerCorners;
-		aruco::detectMarkers(frame, _sideMarkers->dictionary, markerCorners, markerIds
+		aruco::detectMarkers(frame, _markers->dictionary, markerCorners, markerIds
 			, _arucoDetectionParam, noArray() //rejectedImgPoints, 
 			, _quadIntrinsic[id], _quadDistortion[id]
 			);
 		Vec3d rvec, tvec;
 		if(markerIds.size() <= 0
-			|| !aruco::estimatePoseBoard(markerCorners, markerIds, _sideMarkers
+			|| !aruco::estimatePoseBoard(markerCorners, markerIds, _markers
 					, _quadIntrinsic[id], _quadDistortion[id] //, rvec, tvec
 					, _quadState[id].rvec, _quadState[id].tvec
 					// , cv::SOLVEPNP_P3P
@@ -547,12 +547,12 @@ void Maruco::onMonoFrame(const sensor_msgs::ImageConstPtr& msg) {
 		Mat frame = cv_bridge::toCvShare(msg, "mono8")->image;
 		vector<int> markerIds;
 		vector<vector<Point2f>> markerCorners;
-		aruco::detectMarkers(frame, _btmMarkers->dictionary, markerCorners, markerIds
+		aruco::detectMarkers(frame, _markers->dictionary, markerCorners, markerIds
 			, _arucoDetectionParam, noArray() //rejectedImgPoints, 
 			, _monoIntrinsic, _monoDistortion);
 		Vec3d rvec, tvec;
 		if(markerIds.size() <= 0
-			|| !aruco::estimatePoseBoard(markerCorners, markerIds, _btmMarkers
+			|| !aruco::estimatePoseBoard(markerCorners, markerIds, _markers
 					, _monoIntrinsic, _monoDistortion //, rvec, tvec
 					, _monoState.rvec, _monoState.tvec
 					// , cv::SOLVEPNP_P3P// yield wrong answer
@@ -615,7 +615,7 @@ void Maruco::onMonoFrame(const sensor_msgs::ImageConstPtr& msg) {
 				auto dx = T.x - _prevMonoPosition[0], dy = T.y - _prevMonoPosition[1];
 				if (dx*dx + dy*dy > _wheel_base * _wheel_base
 					&& msg->header.stamp - _marker2QuadTime < _markObsDeadlne) {
-					ROS_WARN_THROTTLE(1, "Quad estimate outlier; dropping estimate");
+					ROS_WARN_THROTTLE(1, "Mono estimate outlier; dropping estimate");
 					return;
 				}
 			}

@@ -528,13 +528,16 @@ bool HcPathNode::heuristic_plan() {
 		segments.push_back({
 			.delta_s = +R * thetaSign * dTheta, .kappa = thetaSign * kappa, .sigma = 0
 		});
-		// generate the poses
+
+		// generate the openloop poses manually
 		path.push_back({
 			.x = start.x, .y = start.y, .theta = start.theta
 			, .kappa = thetaSign * kappa, .d = 1
 		});
-		auto thetaRes = thetaSign * kPathRes * kappa; 
-		for (auto theta=start.theta+thetaRes; theta < goal.theta; theta += thetaRes) {
+		auto thetaRes = thetaSign * kPathRes * kappa;
+		for (auto theta=start.theta+thetaRes
+			; abs(goal.theta - theta) > kPathRes * kappa
+			; theta += thetaRes) {
 			auto stheta = sin(theta), ctheta = cos(theta);
 			path.push_back({
 				.x = x_c - _pathSign * R * stheta, .y = y_c + _pathSign * R * ctheta
@@ -566,12 +569,13 @@ bool HcPathNode::heuristic_plan() {
 			_parkingState = ParkingState::distancing;				
 		}
 	} else {// backup into target
-
+#if 0
 		ok = Dubins(start, goal, segments, path);
 		if (ok) goto done_planning;
 		ROS_INFO("No approaching Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
 				, start.x, start.y, start.theta, start.kappa
 				, goal.x, goal.y, goal.theta);
+#endif
 
 		ok = RSpmpm(start, goal, segments, path);
 		if (ok) goto done_planning;
