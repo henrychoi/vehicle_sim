@@ -469,18 +469,19 @@ bool HcPathNode::heuristic_plan() {
 			// heuristic: if initial heading far off from straight,
 			// aim farther away from the target
 			+ abs(pify(goal.theta - _2Dpose.yaw)) * _wheel_base;
-	goal.x = _pathSign > 0
-		? _xform2kingpin.transform.translation.x
-			- _xform2fifth.transform.translation.x// go a bit farther to reach the kingpin
-			+ backoff
-		: _xform2hitch.transform.translation.x
-			+ _xform2fifth.transform.translation.x// go farther to reach the pylons
-			- backoff
-		;
 
 	if (inParkingState(ParkingState::approaching)
 		|| _pathSign * (start.x - goal.x) < _wheel_base) { // too close; move away
-#if 1
+		backoff *= 4;
+		goal.x = _pathSign > 0
+			? _xform2kingpin.transform.translation.x
+				- _xform2fifth.transform.translation.x// go a bit farther to reach the kingpin
+				+ backoff
+			: _xform2hitch.transform.translation.x
+				+ _xform2fifth.transform.translation.x// go farther to reach the pylons
+				- backoff
+			;
+#if 0
 		// just drive to toward y=0 (trailer center line)
 		// @see https://docs.google.com/document/d/13Mn3p75zZXQYXpwDJOEeD26kr2TT-mhuMjfdoP6-Ll8/edit#bookmark=id.yy5jjshplmk1
 		double kappa, R, x_c, y_c;
@@ -552,7 +553,7 @@ bool HcPathNode::heuristic_plan() {
 		start.d = goal.d = 1; // go forward when recovering
 		for ( ; !ok && backoff < 10 * _wheel_base; backoff += _wheel_base) {
 			goal.x = start.x + _pathSign * backoff;
-			goal.kappa = (1 - signbit(goal.y)) * _kappa_max;
+			goal.kappa = 0;//(1 - signbit(goal.y)) * _kappa_max;
 			for (auto lateral=0.; !ok && lateral < 0.5*backoff; lateral += 0.1*backoff) {
 				goal.y = -lateralDir * lateral;
 				goal.theta = _pathSign > 0 ? goal.y : pify(M_PI - goal.y);
@@ -566,10 +567,27 @@ bool HcPathNode::heuristic_plan() {
 		}
 #endif
 		if (ok) {
+			// don't drive too far away
+			auto i=0;
+			for (const auto& state: path) {
+				if (_pathSign * (state.x - start.x) > 5 * _wheel_base) {
+					break;
+				}
+				++i;
+			}
+			path.resize(i); // chop off the states getting us too far away
 			_parkingState = ParkingState::distancing;				
 		}
 	} else {// backup into target
-#if 0
+		goal.x = _pathSign > 0
+			? _xform2kingpin.transform.translation.x
+				- _xform2fifth.transform.translation.x// go a bit farther to reach the kingpin
+				+ backoff
+			: _xform2hitch.transform.translation.x
+				+ _xform2fifth.transform.translation.x// go farther to reach the pylons
+				- backoff
+			;
+#if 1
 		ok = Dubins(start, goal, segments, path);
 		if (ok) goto done_planning;
 		ROS_INFO("No approaching Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
