@@ -481,11 +481,11 @@ bool HcPathNode::heuristic_plan() {
 				+ _xform2fifth.transform.translation.x// go farther to reach the pylons
 				- backoff
 			;
-#if 0
+#if 1
 		// just drive to toward y=0 (trailer center line)
 		// @see https://docs.google.com/document/d/13Mn3p75zZXQYXpwDJOEeD26kr2TT-mhuMjfdoP6-Ll8/edit#bookmark=id.yy5jjshplmk1
 		double kappa, R, x_c, y_c;
-		for (kappa = _kappa_max; kappa > 0; kappa -= 0.2) {
+		for (kappa = 0.75 * _kappa_max; kappa > 0; kappa -= 0.1) {
 			R = 1/kappa;
 			auto sthetas = sin(start.theta), cthetas = cos(start.theta);
 			// center of turning circle

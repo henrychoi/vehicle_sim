@@ -25,6 +25,15 @@
 using namespace cv;
 using namespace std;
 
+static double pify(double alpha) {
+  double v = fmod(alpha, 2*M_PI);
+  if (v < -M_PI)
+    v += 2*M_PI;
+  else if (v > M_PI)
+    v -= 2*M_PI;
+  return v;
+}
+
 class Maruco {
 	typedef Maruco Self;
 public:
@@ -113,7 +122,8 @@ private:
 	Ptr<aruco::Board> _markers, _btmMarkers;
 	Ptr<aruco::DetectorParameters> _arucoDetectionParam = aruco::DetectorParameters::create();
 
-	struct _CamState { Vec3d rvec, tvec; } _quadState[4], _monoState;
+	struct _CamState { Vec3d rvec = {0,0,0}, tvec = {0,0,0}; }
+		_quadState[4], _monoState;
 
 	struct BicycleState_ { ros::Time time; double k, ds; //, abs_ds;
 	};
@@ -172,7 +182,18 @@ Maruco::Maruco()
 			_quadDistortion[id].at<double>(0, i) = values[i];
 	}
 #endif
-  
+
+#if 0
+  	// @see https://docs.opencv.org/4.x/d5/dae/tutorial_aruco_detection.html
+	// _arucoDetectionParam->adaptiveThreshWinSizeMin *= 4;
+	// _arucoDetectionParam->adaptiveThreshWinSizeMax *= 4;
+	// _arucoDetectionParam->adaptiveThreshWinSizeStep *= 4;
+
+  	_arucoDetectionParam->minMarkerPerimeterRate *= 5;
+	// _arucoDetectionParam->minMarkerDistanceRate *= 2;
+	_arucoDetectionParam->polygonalApproxAccuracyRate *= 0.5;
+  	// _arucoDetectionParam->adaptiveThreshConstant *= 3;
+#endif
   	auto dict = aruco::getPredefinedDictionary(aruco::DICT_4X4_250);
 	vector<int> ids;
 	for (auto i=0; i < 2*(6+8) + 12*16; ++i) { // 4 sides
@@ -180,7 +201,7 @@ Maruco::Maruco()
 	}
 
 	vector<vector<cv::Point3f>> corners;
-	//front
+	//front: 0~5
 	corners.push_back({Point3f(	+0.254,		-0.14	,	+0.375)// top row
 					, Point3f(	+0.086,		-0.14	,	+0.375)
 					, Point3f(	+0.086,		-0.05	,	+0.375)
@@ -205,7 +226,7 @@ Maruco::Maruco()
 					, Point3f(	-0.254,		+0.05	,	+0.375)
 					, Point3f(	-0.254,		+0.14	,	+0.375)
 					, Point3f(	-0.086,		+0.14	,	+0.375)});
-	// right,		
+	// right: 6~13	
 	corners.push_back({Point3f(	+0.255,		-0.14	,	-0.374	)// top row
 					, Point3f(	+0.255,		-0.14	,	-0.1885)
 					, Point3f(	+0.255,		-0.05	,	-0.1885)
@@ -238,7 +259,7 @@ Maruco::Maruco()
 					, Point3f(	+0.255,		+0.05	,	+0.374	)
 					, Point3f(	+0.255,		+0.14	,	+0.374	)
 					, Point3f(	+0.255,		+0.14	,	+0.1885)});
-	// rear,		
+	// rear: 14~19	
 	corners.push_back({Point3f(	-0.254,		-0.14	,	-0.375)// top row
 					, Point3f(	-0.086,		-0.14	,	-0.375)
 					, Point3f(	-0.086,		-0.05	,	-0.375)
@@ -263,7 +284,7 @@ Maruco::Maruco()
 					, Point3f(	+0.254,		+0.05	,	-0.375)
 					, Point3f(	+0.254,		+0.14	,	-0.375)
 					, Point3f(	+0.086,		+0.14	,	-0.375)});
-	// left,		
+	// left: 20~27	
 	corners.push_back({Point3f(	-0.255,		-0.14	,	+0.374)// top row
 					, Point3f(	-0.255,		-0.14	,	+0.1885)
 					, Point3f(	-0.255,		-0.05	,	+0.1885)
@@ -559,7 +580,23 @@ void Maruco::onMonoFrame(const sensor_msgs::ImageConstPtr& msg) {
 					)) {
 			return;
 		}
-		rvec = _monoState.rvec; tvec = _monoState.tvec;
+
+		rvec[0] = pify(_monoState.rvec[0]);
+		rvec[1] = pify(_monoState.rvec[1]);
+		rvec[2] = pify(_monoState.rvec[2]);
+		tvec = _monoState.tvec;
+		_monoState.rvec = rvec;
+#if 0
+		if (_monoState.tvec[2]) {
+			const auto diff = tvec - _monoState.tvec
+					, diff2 = diff * diff;
+			if (diff2[0] + diff2[1] + diff2[2] > (0.1*0.1) * _wheel_base * _wheel_base) {
+				ROS_ERROR("Insane aruco pose jump; dropping");
+				return;
+			}
+		}
+#endif
+
 		string markerIdStr = format("%d", markerIds[0]);
 		for (auto i=1; i < markerIds.size(); ++i) {
 			markerIdStr += format(",%d", markerIds[i]);
@@ -582,6 +619,7 @@ void Maruco::onMonoFrame(const sensor_msgs::ImageConstPtr& msg) {
 			return;
 		}
 #endif
+		// if (Q.w() < 0) { Q.x = -Q.x(); } 
 
 		geometry_msgs::PoseStamped cam2marker;
 		cam2marker.pose.orientation.x = Q.x();
@@ -611,13 +649,22 @@ void Maruco::onMonoFrame(const sensor_msgs::ImageConstPtr& msg) {
 			);
 
 			auto T = base2marker.pose.position;
+
 			if (_prevMonoPosition[0]) {
+#if 1
 				auto dx = T.x - _prevMonoPosition[0], dy = T.y - _prevMonoPosition[1];
-				if (dx*dx + dy*dy > _wheel_base * _wheel_base
-					&& msg->header.stamp - _marker2QuadTime < _markObsDeadlne) {
-					ROS_WARN_THROTTLE(1, "Mono estimate outlier; dropping estimate");
+				if (dx*dx + dy*dy > (0.5*0.5)*_wheel_base * _wheel_base) {
+					ROS_ERROR("mono estimate outlier delta = (%.2f, %.2f)"
+							, dx, dy);
 					return;
 				}
+#endif
+#if 0
+				if (msg->header.stamp - _marker2QuadTime < _markObsDeadlne) {
+					ROS_WARN("ignoring mono in favor of recent quad");
+					return;
+				}
+#endif
 			}
 			_marker2MonoTime = cam2marker.header.stamp;
 			_prevMonoPosition[0] = T.x; _prevMonoPosition[1] = T.y;
