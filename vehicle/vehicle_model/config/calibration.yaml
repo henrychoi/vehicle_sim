@@ -4,7 +4,7 @@ base_link2camera:
   y: 0
   z: 0.07
   roll: 0.0
-  pitch: -.787
+  pitch: -1.0472
   yaw: 3.14159
 base_link2imu:
   x: 0.0
