@@ -54,34 +54,8 @@ class HcPathNode {
 
 	int32_t _pathSign = 0; // side hitch (from the back) vs the kingpin (+1)
 	bool heuristic_plan();
-	bool Dubins(State& start, State& goal
-		, vector<Control>& segments, vector<State>& path) {
-		CC_Dubins_State_Space ss(_kappa_max, _sigma_max, kPathRes, start.d > 0);
-		ss.set_filter_parameters(motion_noise_, measurement_noise_, controller_);
-		segments.clear(); path.clear();
-		auto len = ss.get_path(start, goal, segments, path);
-		// A valid path should be less than the Manhattan distance
-		return len < fabs(goal.x - start.x) + fabs(goal.y - start.y);
-	}
-
-	bool RSpmpm(State& start, State& goal
-		, vector<Control>& segments, vector<State>& path) {
-		HCpmpm_Reeds_Shepp_State_Space ss(_kappa_max, _sigma_max, kPathRes);
-		ss.set_filter_parameters(motion_noise_, measurement_noise_, controller_);
-		segments.clear(); path.clear();
-		auto len = ss.get_path(start, goal, segments, path); (void)len;	
-		int axialDir = 1 - 2*signbit(goal.x - start.x);
-		for (const auto& point: path) {			
-			if (axialDir * (point.x - start.x) >= 0) {
-				continue;
-			}
-			// If going backward, check collision
-			if (dist2trailer(point.x, point.y, point.theta) < _safe_distance) {
-				return false;
-			}
-		}
-		return true;
-	}
+	bool Dubins(State& start, State& goal, vector<Control>& segments, vector<State>& path);
+	bool RSpmpm(State& start, State& goal, vector<Control>& segments, vector<State>& path);
 
 	float dist2trailer(float x, float y, float yaw);
     ros::NodeHandle _nh, ph_;
@@ -447,6 +421,49 @@ void HcPathNode::onGoal() {
 	}
 }
 
+bool HcPathNode::Dubins(State& start, State& goal
+	, vector<Control>& segments, vector<State>& path) {
+	CC_Dubins_State_Space ss(_kappa_max, _sigma_max, kPathRes, start.d > 0);
+	ss.set_filter_parameters(motion_noise_, measurement_noise_, controller_);
+	segments.clear(); path.clear();
+	auto len = ss.get_path(start, goal, segments, path);
+	// A valid path should be less than the Manhattan distance
+	if (len > fabs(goal.x - start.x) + fabs(goal.y - start.y)) {
+		return false;
+	}
+
+	int axialDir = 1 - 2*signbit(goal.x - start.x);
+	for (const auto& point: path) {			
+		if (axialDir * (point.x - start.x) >= 0) {
+			continue;
+		}
+		// If going backward, check collision
+		if (dist2trailer(point.x, point.y, point.theta) < _safe_distance) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool HcPathNode::RSpmpm(State& start, State& goal
+	, vector<Control>& segments, vector<State>& path) {
+	HCpmpm_Reeds_Shepp_State_Space ss(_kappa_max, _sigma_max, kPathRes);
+	ss.set_filter_parameters(motion_noise_, measurement_noise_, controller_);
+	segments.clear(); path.clear();
+	auto len = ss.get_path(start, goal, segments, path); (void)len;	
+	int axialDir = 1 - 2*signbit(goal.x - start.x);
+	for (const auto& point: path) {			
+		if (axialDir * (point.x - start.x) >= 0) {
+			continue;
+		}
+		// If going backward, check collision
+		if (dist2trailer(point.x, point.y, point.theta) < _safe_distance) {
+			return false;
+		}
+	}
+	return true;
+}
+
 bool HcPathNode::heuristic_plan() {
 	bool ok = false;
 	auto t0 = ros::Time::now();
@@ -460,27 +477,38 @@ bool HcPathNode::heuristic_plan() {
 		, .kappa = _curvature // the current curvature
 		, .d = -1 // backing up by default
 	};
-	State goal = { //.theta = M_PI * signbit(_pathSign), // 0 or pi
-		.y = 0, .kappa = 0
-		, .d = -1 // this demo just backs up to both kingpin and hitch
+	auto dockingPt = _pathSign > 0
+		? _xform2kingpin.transform.translation.x - _xform2fifth.transform.translation.x
+		: _xform2hitch.transform.translation.x   + _xform2fifth.transform.translation.x;
+	State goal = { .x = dockingPt, .y = 0, 
+		.theta = M_PI * signbit(_pathSign), // 0 or pi
+		.kappa = 0, .d = -1 // this demo just backs up to both kingpin and hitch
 	};
-	goal.theta = _pathSign > 0 ? 0 : M_PI;
-	auto backoff = 0.5 * abs(_2Dpose.T[1])
-			// heuristic: if initial heading far off from straight,
-			// aim farther away from the target
-			+ abs(pify(goal.theta - _2Dpose.yaw)) * _wheel_base;
 
-	if (inParkingState(ParkingState::approaching)
-		|| _pathSign * (start.x - goal.x) < _wheel_base) { // too close; move away
-		backoff *= 4;
-		goal.x = _pathSign > 0
-			? _xform2kingpin.transform.translation.x
-				- _xform2fifth.transform.translation.x// go a bit farther to reach the kingpin
-				+ backoff
-			: _xform2hitch.transform.translation.x
-				+ _xform2fifth.transform.translation.x// go farther to reach the pylons
-				- backoff
-			;
+	ok = Dubins(start, goal, segments, path);
+	if (!ok) {
+		ROS_INFO("No final Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f]"
+				, start.x, start.y, start.theta, start.kappa, goal.x);
+	}
+	for (auto backoff = 0.5 * _wheel_base
+		; !ok && backoff < _pathSign * (start.x - dockingPt)
+		; backoff += _wheel_base) {
+		goal.x = dockingPt + _pathSign * _wheel_base;
+		ok = Dubins(start, goal, segments, path);
+		if (ok)
+			break;
+		ROS_INFO("No approaching Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f]"
+				, start.x, start.y, start.theta, start.kappa, goal.x);
+
+		ok = RSpmpm(start, goal, segments, path);
+		if (ok)
+			break;
+		ROS_WARN("No approaching RS [%.2f, %.2f, %.2f] --> [%.2f]"
+				, start.x, start.y, start.theta, goal.x);
+	}
+	if (ok) {
+		_parkingState = ParkingState::approaching;				
+	} else { // distancing
 #if 1
 		// just drive to toward y=0 (trailer center line)
 		// @see https://docs.google.com/document/d/13Mn3p75zZXQYXpwDJOEeD26kr2TT-mhuMjfdoP6-Ll8/edit#bookmark=id.yy5jjshplmk1
@@ -522,8 +550,11 @@ bool HcPathNode::heuristic_plan() {
 					, start.x, start.y, start.theta);
 			return false;
 		}
-		ROS_WARN("Pure circle path from %.2f found for kappa %.2f, goal x,theta %.2f, %.2f"
+		ROS_WARN("Pure circle path from %.2f rad for kappa %.2f, goal x %.2f, theta %.2f"
 				, start.theta, kappa, goal.x, goal.theta);
+
+		segments.clear(); path.clear();
+
 		auto dTheta = pify(goal.theta - start.theta);
 		auto thetaSign = 1 - signbit(dTheta);
 		segments.push_back({
@@ -577,37 +608,6 @@ bool HcPathNode::heuristic_plan() {
 			}
 			path.resize(i); // chop off the states getting us too far away
 			_parkingState = ParkingState::distancing;				
-		}
-	} else {// backup into target
-		goal.x = _pathSign > 0
-			? _xform2kingpin.transform.translation.x
-				- _xform2fifth.transform.translation.x// go a bit farther to reach the kingpin
-				+ backoff
-			: _xform2hitch.transform.translation.x
-				+ _xform2fifth.transform.translation.x// go farther to reach the pylons
-				- backoff
-			;
-#if 1
-		ok = Dubins(start, goal, segments, path);
-		if (ok) goto done_planning;
-		ROS_INFO("No approaching Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
-				, start.x, start.y, start.theta, start.kappa
-				, goal.x, goal.y, goal.theta);
-#endif
-
-		ok = RSpmpm(start, goal, segments, path);
-		if (ok) goto done_planning;
-		ROS_WARN("No approaching RS path [%.2f, %.2f, %.2f] --> [%.2f, %.2f]"
-				, start.x, start.y, start.theta, goal.x, goal.y);
-
-		goal.x += _pathSign * backoff;
-		ok = RSpmpm(start, goal, segments, path);
-		if (ok) goto done_planning;
-		ROS_WARN("No approaching RS path [%.2f, %.2f, %.2f] --> [%.2f, %.2f]"
-				, start.x, start.y, start.theta, goal.x, goal.y);
-done_planning:
-		if (ok) {
-			_parkingState = ParkingState::approaching;				
 		}
 	} 
 	// auto elapsed = ros::Time::now() - t0;
