@@ -107,7 +107,7 @@ class HcPathNode {
 
 	static constexpr double kPathRes = 0.05; // [m]
 	double _safe_distance, _kappa_max, _sigma_max
-		, _wheel_base, _track_width, _wheel_tread, _max_kappa
+		, _wheel_base, _track_width, _wheel_tread
 		, _wheel_radius, _wheel_width;
 	geometry_msgs::Point _wheel_fl_pos, _wheel_fr_pos;
 	// vector<geometry_msgs::Point> _footprint, _wheel;
@@ -193,7 +193,7 @@ HcPathNode::HcPathNode()
 	assert(_nh.getParam("/path/wheel_base", _wheel_base));
 	assert(_nh.getParam("/path/track_width", _track_width));
 	_wheel_tread = 0.5 * _track_width;
-	_max_kappa = 1.0/_track_width;
+	// _max_kappa = 1.0/_track_width;
 	assert(_nh.getParam("/path/wheel_radius", _wheel_radius));
 	assert(_nh.getParam("/path/wheel_width", _wheel_width));
 	assert(_nh.getParam("/path/motion_noise/alpha1", motion_noise_.alpha1));
@@ -753,7 +753,7 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 	} // end switch(_gear)
 
 	// Done with bicycle model; distribute the bicycle model to the L/R wheels
-	curvature = clamp(curvature, -_max_kappa, _max_kappa);
+	curvature = clamp(curvature, -_kappa_max, _kappa_max);
 
 	std_msgs::Float64 r_speed, l_speed, r_delta, l_delta;
     if (fabs(curvature) > 1E-4) {
@@ -782,7 +782,8 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 				, _2Dpose.T[0], _2Dpose.T[1], _2Dpose.yaw
 				, _trueFootprintPose[0], _trueFootprintPose[1], _trueFootprintPose[2]);
 	} else {
-		ROS_DEBUG_THROTTLE(0.2, "Gear %d, throttle %.2f, curvature %.2f vs. actual %.2f"
+		ROS_INFO_THROTTLE(0.2,
+			"Gear %d, throttle %.2f, curvature %.2f vs. actual %.2f"
 				, _gear, throttle, curvature, _curvature);
 		_rw_pub.publish(r_speed);
 		_lw_pub.publish(l_speed);
@@ -941,15 +942,13 @@ void HcPathNode::control(double& throttle, double& curvature) {
 		eHeading = pify(first.theta - _2Dpose.yaw);
 		throttle += _Kback_axial * eAxial + _Kback_intaxial * _eKappaInt;
 		_eAxialInt = clamp(_eAxialInt + eAxial, -kMaxThrottle, +kMaxThrottle);
-		ROS_INFO_THROTTLE(0.25
-				, "(%.2f, %.2f, %.2f) gear %d, ds %.2f control (%.2f, %.2f)"
-				, _trueFootprintPose[0], _trueFootprintPose[1], _trueFootprintPose[2]
+		ROS_INFO_THROTTLE(0.25, // "(%.2f, %.2f, %.2f) "
+				"gear %d, ds %.2f kappa(%.2f - %.2f), yaw(%.2f - %.2f), e_polar(%.2f, %.2f)"
+				// , _trueFootprintPose[0], _trueFootprintPose[1], _trueFootprintPose[2]
 				//, _2Dpose.T[0], _2Dpose.T[1]
 				, _gear, ds
-				// , eAxial
-				, throttle
-				// , eLateral, eHeading, eKappa
-				, curvature);
+				, first.kappa, _curvature, first.theta, _2Dpose.yaw, dist1, theta_e
+				);
 		// visualize actual path
 		if (_actual_path.poses.size()) {
 			const auto& last = _actual_path.poses.back();
@@ -975,10 +974,14 @@ void HcPathNode::control(double& throttle, double& curvature) {
 
 		break;
 	} // end throttle and steering calculation using waypoint
-
-	curvature += _Kback_kappa * eKappa + _Kback_intkappa * _eKappaInt
-			+ _Kback_theta * eHeading
-			+ _Kback_lateral * eLateral;
+	auto kappa_fb = _Kback_kappa * eKappa
+			+ _Kback_intkappa * _eKappaInt
+			+ (1-2*signbit(_gear)) * (_Kback_theta * eHeading + _Kback_lateral * eLateral);
+	ROS_DEBUG_THROTTLE(0.25,
+			"throttle %.2f, steer error %.2f,%.2f,%.2f => %.2f+%.2f"
+			, throttle, eKappa, eHeading, eLateral
+			, curvature, kappa_fb);
+	curvature += kappa_fb;
 	_eKappaInt = clamp(_eKappaInt + eKappa, -_Max_intaxial, _Max_intaxial);
 
 	// I considered using the Cauchy distribution shape to limit the throttle
