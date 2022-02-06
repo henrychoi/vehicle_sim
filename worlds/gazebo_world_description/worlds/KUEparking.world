@@ -252,7 +252,7 @@
         </visual>
       </link>
 
-      <!--joint name='aruco_right_joint' type='fixed'>
+      <joint name='aruco_right_joint' type='fixed'>
         <child>aruco_right</child>
         <parent>trailer</parent>
       </joint>
@@ -274,7 +274,7 @@
           <cast_shadows>0</cast_shadows>
           <transparency>0</transparency>
         </visual>
-      </link-->
+      </link>
 
       <joint name="aruco_rear_joint" type="fixed">
         <child>aruco_rear</child>
@@ -300,7 +300,7 @@
         </visual>
       </link>
 
-      <!--joint name='aruco_left_joint' type='fixed'>
+      <joint name='aruco_left_joint' type='fixed'>
         <child>aruco_left</child>
         <parent>trailer</parent>
       </joint>
@@ -322,7 +322,7 @@
           <cast_shadows>0</cast_shadows>
           <transparency>0</transparency>
         </visual>
-      </link-->
+      </link>
 
       <joint name='aruco_bottom_joint' type='fixed'>
         <child>aruco_bottom</child>
