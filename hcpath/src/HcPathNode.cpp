@@ -100,10 +100,10 @@ class HcPathNode {
 		// Assume the transform from base_footprint to side hitch center is the same
 		// as that to the fifth wheel
 		;  
-	double _eAxialInt = 0, _eKappaInt = 0
+	double _eAxialInt = 0, _eIntTheta = 0
 		, _Kforward_s, _Kforward_kappa, _Kback_axial, _Kback_intaxial // throttle gains
-		, _Max_intaxial // integral limit
-		, _Kback_theta, _Kback_kappa, _Kback_intkappa, _Kback_lateral;
+		, _Max_intKappa // integral limit
+		, _Kback_theta, _Kback_intTheta, _Kback_kappa, _Kback_intkappa, _Kback_lateral;
 
 	static constexpr double kPathRes = 0.05; // [m]
 	double _safe_distance, _kappa_max, _sigma_max
@@ -182,7 +182,8 @@ HcPathNode::HcPathNode()
 	_nh.param("Kback_axial", _Kback_axial, 1.);
 	_nh.param("Kback_intaxial", _Kback_intaxial, 0.01);
 
-	_nh.param("Kback_theta", _Kback_theta, 1.);
+	_nh.param("Kback_theta", _Kback_theta, 3.);
+	_nh.param("Kback_intTheta", _Kback_intTheta, 0.05);
 	_nh.param("Kback_kappa", _Kback_kappa, 0.5);
 	_nh.param("Kback_intkappa", _Kback_intkappa, 0.001);
 	_nh.param("Kback_lateral", _Kback_lateral, 1.);
@@ -471,7 +472,7 @@ bool HcPathNode::heuristic_plan() {
 	vector<State> path;
 	vector<Control> segments;
 
-	auto lateralDir = 1 - 2*signbit(_2Dpose.T[1]); // am I on the L or R side of trailer?
+	auto lateralDir = 1 - 2*signbit(_2Dpose.T[1]); // am I on the L(+) or R(-) side of trailer?
 	State start = { // path planner pose is always relative to the trailer
 		.x = _2Dpose.T[0], .y = _2Dpose.T[1], .theta = _2Dpose.yaw
 		, .kappa = _curvature // the current curvature
@@ -485,26 +486,30 @@ bool HcPathNode::heuristic_plan() {
 		.kappa = 0, .d = -1 // this demo just backs up to both kingpin and hitch
 	};
 
-	ok = Dubins(start, goal, segments, path);
-	if (!ok) {
-		ROS_INFO("No final Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f]"
-				, start.x, start.y, start.theta, start.kappa, goal.x);
-	}
-	for (auto backoff = 0.5 * _wheel_base
-		; !ok && backoff < _pathSign * (start.x - dockingPt)
-		; backoff += _wheel_base) {
-		goal.x = dockingPt + _pathSign * _wheel_base;
+	if (!inParkingState(ParkingState::approaching)
+		&& _pathSign * (start.x - goal.x) > _wheel_base) { // try approach
+		ROS_WARN("Trying to generate approach path");
 		ok = Dubins(start, goal, segments, path);
-		if (ok)
-			break;
-		ROS_INFO("No approaching Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f]"
-				, start.x, start.y, start.theta, start.kappa, goal.x);
+		if (!ok) {
+			ROS_INFO("No final Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f]"
+					, start.x, start.y, start.theta, start.kappa, goal.x);
+		}
+		for (auto backoff = 0.5 * _wheel_base
+			; !ok && backoff < _pathSign * (start.x - dockingPt)
+			; backoff += _wheel_base) {
+			goal.x = dockingPt + _pathSign * _wheel_base;
+			ok = Dubins(start, goal, segments, path);
+			if (ok)
+				break;
+			ROS_INFO("No approaching Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f]"
+					, start.x, start.y, start.theta, start.kappa, goal.x);
 
-		ok = RSpmpm(start, goal, segments, path);
-		if (ok)
-			break;
-		ROS_WARN("No approaching RS [%.2f, %.2f, %.2f] --> [%.2f]"
-				, start.x, start.y, start.theta, goal.x);
+			ok = RSpmpm(start, goal, segments, path);
+			if (ok)
+				break;
+			ROS_WARN("No approaching RS [%.2f, %.2f, %.2f] --> [%.2f]"
+					, start.x, start.y, start.theta, goal.x);
+		}
 	}
 	if (ok) {
 		_parkingState = ParkingState::approaching;				
@@ -513,7 +518,7 @@ bool HcPathNode::heuristic_plan() {
 		// just drive to toward y=0 (trailer center line)
 		// @see https://docs.google.com/document/d/13Mn3p75zZXQYXpwDJOEeD26kr2TT-mhuMjfdoP6-Ll8/edit#bookmark=id.yy5jjshplmk1
 		double kappa, R, x_c, y_c;
-		for (kappa = 0.75 * _kappa_max; kappa > 0; kappa -= 0.1) {
+		for (kappa = 0.6 * _kappa_max; kappa > 0; kappa -= 0.1) {
 			R = 1/kappa;
 			auto sthetas = sin(start.theta), cthetas = cos(start.theta);
 			// center of turning circle
@@ -555,10 +560,14 @@ bool HcPathNode::heuristic_plan() {
 
 		segments.clear(); path.clear();
 
-		auto dTheta = pify(goal.theta - start.theta);
+		auto dTheta = pify(goal.theta - start.theta)
+				* 1.2; // heuristic for the approach: go a bit farther than the center line
 		auto thetaSign = 1 - signbit(dTheta);
+		goal.theta = start.theta + dTheta;
 		segments.push_back({
-			.delta_s = +R * thetaSign * dTheta, .kappa = thetaSign * kappa, .sigma = 0
+			.delta_s = +R * thetaSign * dTheta
+			, .kappa = thetaSign * kappa
+			, .sigma = 0
 		});
 
 		// generate the openloop poses manually
@@ -619,7 +628,7 @@ bool HcPathNode::heuristic_plan() {
 			ROS_INFO("control segment %.2f, %.2f, %.2f", seg.delta_s, seg.kappa, seg.sigma);
 			_openControlQ.push_back(seg);
 		}
-		_eKappaInt = _eAxialInt = 0;
+		_eIntTheta = _eAxialInt = 0;
 
 		nav_msgs::Path nav_path;
 		nav_path.header.frame_id = "trailer";
@@ -782,7 +791,7 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 				, _2Dpose.T[0], _2Dpose.T[1], _2Dpose.yaw
 				, _trueFootprintPose[0], _trueFootprintPose[1], _trueFootprintPose[2]);
 	} else {
-		ROS_INFO_THROTTLE(0.2,
+		ROS_INFO_THROTTLE(0.25,
 			"Gear %d, throttle %.2f, curvature %.2f vs. actual %.2f"
 				, _gear, throttle, curvature, _curvature);
 		_rw_pub.publish(r_speed);
@@ -797,7 +806,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 	const auto now = ros::Time::now();
 
 	auto ds = _s - _prevS; // displacement along the path
-	double eAxial = 0, eLateral = 0, eHeading = 0, eKappa = 0;
+	double eAxial = 0, eLateral = 0, eTheta = 0, eKappa = 0;
 	static constexpr double kCos30Deg = 0.866;
 	static constexpr double kEpsilon = 0.01  // 1 cm ball
 		, kEpsilonSq = kEpsilon * kEpsilon;
@@ -939,8 +948,8 @@ void HcPathNode::control(double& throttle, double& curvature) {
 		eAxial = dist1 * cos1; // signed, depending on whether front/back waypoint
 		eLateral = dist1 * sin(theta_e);
 		eKappa = first.kappa - _curvature;
-		eHeading = pify(first.theta - _2Dpose.yaw);
-		throttle += _Kback_axial * eAxial + _Kback_intaxial * _eKappaInt;
+		eTheta = pify(first.theta - _2Dpose.yaw);
+		throttle += _Kback_axial * eAxial + _Kback_intaxial * _eAxialInt;
 		_eAxialInt = clamp(_eAxialInt + eAxial, -kMaxThrottle, +kMaxThrottle);
 		ROS_INFO_THROTTLE(0.25, // "(%.2f, %.2f, %.2f) "
 				"gear %d, ds %.2f kappa(%.2f - %.2f), yaw(%.2f - %.2f), e_polar(%.2f, %.2f)"
@@ -975,14 +984,15 @@ void HcPathNode::control(double& throttle, double& curvature) {
 		break;
 	} // end throttle and steering calculation using waypoint
 	auto kappa_fb = _Kback_kappa * eKappa
-			+ _Kback_intkappa * _eKappaInt
-			+ (1-2*signbit(_gear)) * (_Kback_theta * eHeading + _Kback_lateral * eLateral);
-	ROS_DEBUG_THROTTLE(0.25,
+			+ _Kback_intkappa * _eIntTheta
+			+ (1-2*signbit(_gear)) * (_Kback_theta * eTheta + _Kback_intTheta * _eIntTheta
+									+ _Kback_lateral * eLateral);
+	ROS_INFO_THROTTLE(0.25,
 			"throttle %.2f, steer error %.2f,%.2f,%.2f => %.2f+%.2f"
-			, throttle, eKappa, eHeading, eLateral
+			, throttle, eKappa, eTheta, eLateral
 			, curvature, kappa_fb);
 	curvature += kappa_fb;
-	_eKappaInt = clamp(_eKappaInt + eKappa, -_Max_intaxial, _Max_intaxial);
+	_eIntTheta = clamp(_eIntTheta + eTheta, -kMaxSteer, kMaxSteer);
 
 	// I considered using the Cauchy distribution shape to limit the throttle
 	// the curvature curvature error is large, but this is more intuitive
