@@ -57,7 +57,7 @@ class HcPathNode {
 	bool Dubins(State& start, State& goal, vector<Control>& segments, vector<State>& path);
 	bool RSpmpm(State& start, State& goal, vector<Control>& segments, vector<State>& path);
 
-	float dist2trailer(float x, float y, float yaw);
+	float dist2trailer(float x, float y, float yaw, bool logCollision=false);
     ros::NodeHandle _nh, ph_;
 	ros::Publisher _planned_pub, _path_pub, _rw_pub, _lw_pub, _rd_pub, _ld_pub;
 
@@ -212,7 +212,6 @@ HcPathNode::HcPathNode()
     auto footprint = costmap_2d::makeFootprintFromParams(_nh); 
 	assert(footprint.size() && footprint.size() <= 8); // c2Poly limited to 8 vertices
 
-#if 1
 	_footprintPoly.count = footprint.size();
 	for (auto i=0; i < _footprintPoly.count; ++i) {
 		_footprintPoly.verts[i].x = footprint[i].x;
@@ -239,32 +238,12 @@ HcPathNode::HcPathNode()
 	}
 	c2MakePoly(&_chassisFrontPoly);
 
-#else
-    geometry_msgs::Point point1, point2, point3, point4;
-    point1.x =  _wheel_radius; point1.y =  0.5 * _wheel_width;
-    point2.x = -_wheel_radius; point2.y =  0.5 * _wheel_width;
-    point3.x = -_wheel_radius; point3.y = -0.5 * _wheel_width;
-    point4.x =  _wheel_radius; point4.y = -0.5 * _wheel_width;
-    _wheel.push_back(point1);
-    _wheel.push_back(point2);
-    _wheel.push_back(point3);
-    _wheel.push_back(point4);
-
-	assert(_nh.getParam("/path/chassis_back", xmlBack));
-	assert(chassisBack.size());
-	_chassisBackPoly.count = chassisBack.size();
-	for (auto i=0; i < _chassisBackPoly.count; ++i) {
-		_chassisBackPoly.verts[i].x = chassisBack[i].x;
-		_chassisBackPoly.verts[i].y = chassisBack[i].y;
-	}
-	c2MakePoly(&_chassisBackPoly);
-#endif
 	as_.registerPreemptCallback(boost::bind(&Self::onPreempt, this));
 	as_.registerGoalCallback(boost::bind(&Self::onGoal, this));
     as_.start();//start() should be called after construction of the server
 }
 
-float HcPathNode::dist2trailer(float x, float y, float yaw) {
+float HcPathNode::dist2trailer(float x, float y, float yaw, bool logCollision) {
 	static constexpr float kLegHalfBase = .27f // @see KUEparking world leg1 pose
 		, kLegHalfWidth = .23f
 		, kLegRadius = 0.02f;
@@ -298,7 +277,8 @@ float HcPathNode::dist2trailer(float x, float y, float yaw) {
 						, &_footprintPoly, C2_TYPE_POLY, &xform
 						, NULL, NULL, true, NULL, &_gjkCacheB[l]);
 		if (distB <= 0) { // collision!
-			ROS_DEBUG("center collision against leg %u at yaw %.2f", l, yaw);
+			if (logCollision)
+				ROS_WARN("center collision against leg %u at yaw %.2f", l, yaw);
 		} else {
 			ROS_DEBUG("center distance %.2f to leg %u at yaw %.2f", distB, l, yaw);
 		}
@@ -400,7 +380,8 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 	if(abs(_gear) == 1) {// check for collision while driving (in gear)
 		_dist2Trailer = dist2trailer(static_cast<float>(_2Dpose.T[0])
 									, static_cast<float>(_2Dpose.T[1])
-									, _2Dpose.yaw);
+									, _2Dpose.yaw
+									, true);
 		// auto elapsed = ros::Time::now() - t0;
 		// ROS_DEBUG_THROTTLE(1, "collision checking took %u ns", elapsed.nsec);
 	}
@@ -424,22 +405,40 @@ void HcPathNode::onGoal() {
 
 bool HcPathNode::Dubins(State& start, State& goal
 	, vector<Control>& segments, vector<State>& path) {
-	CC_Dubins_State_Space ss(_kappa_max, _sigma_max, kPathRes, start.d > 0);
+	HCpmpm_Reeds_Shepp_State_Space ss(_kappa_max, _sigma_max, kPathRes);
 	ss.set_filter_parameters(motion_noise_, measurement_noise_, controller_);
+	vector<Control> controls;
+	vector<State> points;
+	(void)ss.get_path(start, goal, controls, points);
+
 	segments.clear(); path.clear();
-	auto len = ss.get_path(start, goal, segments, path);
+	auto len = 0.0; 
+	for (const auto& control: controls) {
+		if (control.delta_s * start.d <= 0) continue;
+		segments.push_back(control);
+		len += fabs(control.delta_s);
+	}
+	for (const auto& point: points) {
+		if (point.d * start.d <= 0) continue;
+		// ROS_INFO("waypoint d %.2f", point.d);
+		path.push_back(point);
+	}
+
 	// A valid path should be less than the Manhattan distance
-	if (len > fabs(goal.x - start.x) + fabs(goal.y - start.y)) {
+	auto manhattan = fabs(goal.x - start.x) + fabs(goal.y - start.y);
+	if (len > 1.2 * manhattan) {
+		ROS_DEBUG("Dubins dist %.2f > %.2f", len, manhattan);
 		return false;
 	}
 
 	int axialDir = 1 - 2*signbit(goal.x - start.x);
 	for (const auto& point: path) {			
+		// ROS_INFO("waypoint d %.2f", point.d);
 		if (axialDir * (point.x - start.x) >= 0) {
 			continue;
 		}
 		// If going backward, check collision
-		if (dist2trailer(point.x, point.y, point.theta) < _safe_distance) {
+		if (dist2trailer(point.x, point.y, point.theta, false) < _safe_distance) {
 			return false;
 		}
 	}
@@ -451,7 +450,7 @@ bool HcPathNode::RSpmpm(State& start, State& goal
 	HCpmpm_Reeds_Shepp_State_Space ss(_kappa_max, _sigma_max, kPathRes);
 	ss.set_filter_parameters(motion_noise_, measurement_noise_, controller_);
 	segments.clear(); path.clear();
-	auto len = ss.get_path(start, goal, segments, path); (void)len;	
+	(void)ss.get_path(start, goal, segments, path);
 	int axialDir = 1 - 2*signbit(goal.x - start.x);
 	for (const auto& point: path) {			
 		if (axialDir * (point.x - start.x) >= 0) {
@@ -486,26 +485,24 @@ bool HcPathNode::heuristic_plan() {
 		.kappa = 0, .d = -1 // this demo just backs up to both kingpin and hitch
 	};
 
-	if (!inParkingState(ParkingState::approaching)
-		&& _pathSign * (start.x - goal.x) > _wheel_base) { // try approach
+	if (!inParkingState(ParkingState::approaching)) {// try approach
 		ROS_WARN("Trying to generate approach path");
-#if 0
+		if (_pathSign * (start.x - goal.x) > _wheel_base 
+			&& !(ok = RSpmpm(start, goal, segments, path))) {
+			ROS_WARN("No approaching RS [%.2f, %.2f, %.2f] --> [%.2f]"
+					, start.x, start.y, start.theta, goal.x);
+		}
+
 		ok = Dubins(start, goal, segments, path);
 		if (!ok) {
-			ROS_INFO("No final Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f]"
+			ROS_INFO("No Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f]"
 					, start.x, start.y, start.theta, start.kappa, goal.x);
-		}
-#endif
-		if (_pathSign < 0
-			&& !(ok = RSpmpm(start, goal, segments, path))) {
-			ROS_WARN("No final RS [%.2f, %.2f, %.2f] --> [%.2f]"
-					, start.x, start.y, start.theta, goal.x);
 		}
 		for (auto backoff = 0.5 * _wheel_base
 			; !ok && backoff < _pathSign * (start.x - dockingPt)
 			; backoff += _wheel_base) {
 			goal.x = dockingPt + _pathSign * _wheel_base;
-#if 0
+#if 1
 			ok = Dubins(start, goal, segments, path);
 			if (ok)
 				break;
@@ -522,88 +519,20 @@ bool HcPathNode::heuristic_plan() {
 	if (ok) {
 		_parkingState = ParkingState::approaching;				
 	} else { // distancing
-#if 0
-		// just drive to toward y=0 (trailer center line)
-		// @see https://docs.google.com/document/d/13Mn3p75zZXQYXpwDJOEeD26kr2TT-mhuMjfdoP6-Ll8/edit#bookmark=id.yy5jjshplmk1
-		double kappa, R, x_c, y_c;
-		for (kappa = 0.55 * _kappa_max; kappa > 0; kappa -= 0.1) {
-			R = 1/kappa;
-			auto sthetas = sin(start.theta), cthetas = cos(start.theta);
-
-			if (_pathSign > 0) {
-				x_c = start.x + R*sthetas; // center of turning circle
-				y_c = start.y - R*cthetas;
-				goal.theta = acos(-y_c * kappa);
-				goal.x = start.x + R * (sthetas + sin(goal.theta)); //goal.y = 0;
-				if (goal.x > _xform2kingpin.transform.translation.x) { // valid
-					break; // far enough away
-				}
-			} else {
-				x_c = start.x - R*sthetas; // center of turning circle
-				y_c = start.y + R*cthetas;
-				goal.theta = acos(y_c * kappa);
-				goal.x = start.x - R * (sthetas + sin(goal.theta)); //goal.y = 0;
-				ROS_INFO("");
-				if (goal.x < _xform2hitch.transform.translation.x) {
-					break; // far enough away
-				}
-			}
-			// goal position too close to the trailer; try a larger radius
-		} // end for(kappa)
-		if (kappa < 0) {
-			ROS_ERROR("Pure circle path not found for start=(%.2f, %.2f, %.2f)"
-					, start.x, start.y, start.theta);
-			return false;
-		}
-		segments.clear(); path.clear();
-
-		auto dTheta = pify(goal.theta - start.theta)
-				* 1.25; // heuristic for the approach: go a bit farther than the center line
-		auto thetaSign = 1 - signbit(dTheta);
-		goal.theta = start.theta + dTheta;
-		ROS_WARN("Pure circle path from %.2f rad for kappa %.2f, goal x %.2f, dTheta %.2f"
-				, start.theta, kappa, goal.x, dTheta);
-
-		segments.push_back({
-			.delta_s = +R * thetaSign * dTheta
-			, .kappa = thetaSign * kappa
-			, .sigma = 0
-		});
-
-		// generate the openloop poses manually
-		path.push_back({
-			.x = start.x, .y = start.y, .theta = start.theta
-			, .kappa = thetaSign * kappa, .d = 1
-		});
-		auto thetaRes = thetaSign * kPathRes * kappa;
-		for (auto theta=start.theta+thetaRes
-			; abs(goal.theta - theta) > kPathRes * kappa
-			; theta += thetaRes) {
-			auto stheta = sin(theta), ctheta = cos(theta);
-			path.push_back({
-				.x = x_c - _pathSign * R * stheta, .y = y_c + _pathSign * R * ctheta
-				, .theta = theta, .kappa = kappa, .d = 1
-			});
-		}
-		path.push_back({
-			.x = goal.x, .y = 0, .theta = goal.theta, .kappa = kappa, .d = 1
-		});
-		ok = true;
-#else
 		start.d = goal.d = 1; // go forward when recovering
-		for (auto backoff = 0.5*_wheel_base
+		for (auto backoff = 0.25*_wheel_base
 			; !ok && backoff < 10 * _wheel_base
 			; backoff += _wheel_base) {
 			goal.kappa = 0;//(1 - signbit(goal.y)) * _kappa_max;
 			goal.x = start.x + _pathSign * backoff;
-			goal.y = -0.2 * lateralDir * (backoff - 3*_wheel_base);
-			goal.theta = _pathSign > 0 ? 2*goal.y : pify(M_PI - 2*goal.y);
+			goal.y = 0.2 * lateralDir * backoff;
+			goal.theta = //_pathSign > 0 ? 0 : M_PI;
+				_pathSign > 0 ? goal.y : pify(M_PI - goal.y);
 			ROS_WARN("Distancing Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
 					, start.x, start.y, start.theta, start.kappa
 					, goal.x, goal.y, goal.theta);
 			ok = Dubins(start, goal, segments, path);
 		}
-#endif
 		if (ok) {
 			// don't drive too far away
 			auto i=0;
@@ -643,7 +572,7 @@ bool HcPathNode::heuristic_plan() {
 		}
 		_planned_pub.publish(nav_path);
 	} else {
-		ROS_ERROR("Path generation failed whil in parking state 0x%X"
+		ROS_ERROR("Path generation failed while in parking state 0x%X"
 				, parkingStateEnum(_parkingState));
 	}
 
