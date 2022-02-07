@@ -100,7 +100,7 @@ class HcPathNode {
 		// Assume the transform from base_footprint to side hitch center is the same
 		// as that to the fifth wheel
 		;  
-	double _eAxialInt = 0, _eIntTheta = 0
+	double _eAxialInt = 0, _eThetaInt = 0
 		, _Kforward_s, _Kforward_kappa, _Kback_axial, _Kback_intaxial // throttle gains
 		, _Max_intKappa // integral limit
 		, _Kback_theta, _Kback_intTheta, _Kback_kappa, _Kback_intkappa, _Kback_lateral;
@@ -555,7 +555,7 @@ bool HcPathNode::heuristic_plan() {
 			ROS_INFO("control segment %.2f, %.2f, %.2f", seg.delta_s, seg.kappa, seg.sigma);
 			_openControlQ.push_back(seg);
 		}
-		_eIntTheta = _eAxialInt = 0;
+		_eThetaInt = _eAxialInt = 0;
 
 		nav_msgs::Path nav_path;
 		nav_path.header.frame_id = "trailer";
@@ -752,7 +752,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 				ROS_WARN("Kappa error %.2f switching gear to %d"
 						, e, _gear);
 				_prevS = _s; ds = _s - _prevS;
-				_eAxialInt = 0; // reset integrated axial error
+				_eThetaInt = _eAxialInt = 0; // reset integrated axial error
 				_waypointTimeout = now + _waypointDeadline;
 			}
 		}
@@ -788,7 +788,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 					if (S * ctrl.delta_s < 0) { // direction switch
 						ROS_WARN("Switching path control to (%.2f, %.2f); N gear"
 								, ctrl.delta_s, ctrl.kappa);
-						_eAxialInt = 0; // reset integral since switching direction
+						_eThetaInt = _eAxialInt = 0; // reset integral since switching direction
 						_gear = 0;
 					}
 				} else {
@@ -806,7 +806,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 
 			if (_gear * first.d < 0) { 
 				ROS_WARN("Gear in opposite of control; switching gear");
-				_eAxialInt = 0; // reset integral since switching direction
+				_eThetaInt = _eAxialInt = 0; // reset integral since switching direction
 				_gear = first.d;
 				// _gear = 0;
 				// continue;
@@ -911,15 +911,15 @@ void HcPathNode::control(double& throttle, double& curvature) {
 		break;
 	} // end throttle and steering calculation using waypoint
 	auto kappa_fb = _Kback_kappa * eKappa
-			+ _Kback_intkappa * _eIntTheta
-			+ (1-2*signbit(_gear)) * (_Kback_theta * eTheta + _Kback_intTheta * _eIntTheta
+			+ _Kback_intkappa * _eThetaInt
+			+ (1-2*signbit(_gear)) * (_Kback_theta * eTheta + _Kback_intTheta * _eThetaInt
 									+ _Kback_lateral * eLateral);
 	ROS_DEBUG_THROTTLE(0.25,
 			"throttle %.2f, steer error %.2f,%.2f,%.2f => %.2f+%.2f"
 			, throttle, eKappa, eTheta, eLateral
 			, curvature, kappa_fb);
 	curvature += kappa_fb;
-	_eIntTheta = clamp(_eIntTheta + eTheta, -kMaxSteer, kMaxSteer);
+	_eThetaInt = clamp(_eThetaInt + eTheta, -kMaxSteer, kMaxSteer);
 
 	// I considered using the Cauchy distribution shape to limit the throttle
 	// the curvature curvature error is large, but this is more intuitive
