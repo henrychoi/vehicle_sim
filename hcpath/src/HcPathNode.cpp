@@ -55,6 +55,7 @@ class HcPathNode {
 	int32_t _pathSign = 0; // side hitch (from the back) vs the kingpin (+1)
 	bool heuristic_plan();
 	bool Dubins(State& start, State& goal, vector<Control>& segments, vector<State>& path);
+	bool RSDubins(State& start, State& goal, vector<Control>& segments, vector<State>& path);
 	bool RSpmpm(State& start, State& goal, vector<Control>& segments, vector<State>& path);
 
 	float dist2trailer(float x, float y, float yaw, bool logCollision=false);
@@ -405,6 +406,36 @@ void HcPathNode::onGoal() {
 
 bool HcPathNode::Dubins(State& start, State& goal
 	, vector<Control>& segments, vector<State>& path) {
+	CC_Dubins_State_Space ss(_kappa_max, _sigma_max, kPathRes);
+	ss.set_filter_parameters(motion_noise_, measurement_noise_, controller_);
+	segments.clear(); path.clear();
+	auto len = ss.get_path(start, goal, segments, path);
+
+	// A valid path should be less than the Manhattan distance
+	auto manhattan = fabs(goal.x - start.x) + fabs(goal.y - start.y);
+	if (len > 1.2 * manhattan) {
+		ROS_DEBUG("Dubins dist %.2f > %.2f", len, manhattan);
+		return false;
+	}
+
+	int axialDir = 1 - 2*signbit(goal.x - start.x);
+	for (const auto& point: path) {			
+		// ROS_INFO("waypoint d %.2f", point.d);
+		if (axialDir * (point.x - start.x) >= 0) {
+			continue;
+		}
+		// If going backward, check collision
+		auto dTheta = axialDir ? point.theta : M_PI - point.theta;
+		if (dist2trailer(point.x, point.y, point.theta, false)
+			< _safe_distance + 0.25*fabs(dTheta)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool HcPathNode::RSDubins(State& start, State& goal
+	, vector<Control>& segments, vector<State>& path) {
 	HCpmpm_Reeds_Shepp_State_Space ss(_kappa_max, _sigma_max, kPathRes);
 	ss.set_filter_parameters(motion_noise_, measurement_noise_, controller_);
 	vector<Control> controls;
@@ -427,7 +458,7 @@ bool HcPathNode::Dubins(State& start, State& goal
 	// A valid path should be less than the Manhattan distance
 	auto manhattan = fabs(goal.x - start.x) + fabs(goal.y - start.y);
 	if (len > 1.2 * manhattan) {
-		ROS_DEBUG("Dubins dist %.2f > %.2f", len, manhattan);
+		ROS_DEBUG("RSDubins dist %.2f > %.2f", len, manhattan);
 		return false;
 	}
 
@@ -437,8 +468,9 @@ bool HcPathNode::Dubins(State& start, State& goal
 		if (axialDir * (point.x - start.x) >= 0) {
 			continue;
 		}
-		// If going backward, check collision
-		if (dist2trailer(point.x, point.y, point.theta, false) < _safe_distance) {
+		auto dTheta = axialDir ? point.theta : M_PI - point.theta;
+		if (dist2trailer(point.x, point.y, point.theta, false)
+			< _safe_distance + 0.25*fabs(dTheta)) {
 			return false;
 		}
 	}
@@ -457,7 +489,9 @@ bool HcPathNode::RSpmpm(State& start, State& goal
 			continue;
 		}
 		// If going backward, check collision
-		if (dist2trailer(point.x, point.y, point.theta) < _safe_distance) {
+		auto dTheta = axialDir ? point.theta : M_PI - point.theta;
+		if (dist2trailer(point.x, point.y, point.theta, false)
+			< _safe_distance + 0.25*fabs(dTheta)) {
 			return false;
 		}
 	}
@@ -493,32 +527,32 @@ bool HcPathNode::heuristic_plan() {
 					, start.x, start.y, start.theta, goal.x);
 		}
 
-		ok = Dubins(start, goal, segments, path);
+		ok = RSDubins(start, goal, segments, path);
 		if (!ok) {
-			ROS_INFO("No Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f]"
+			ROS_INFO("No RSDubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f]"
 					, start.x, start.y, start.theta, start.kappa, goal.x);
 		}
 		for (auto backoff = 0.5 * _wheel_base
 			; !ok && backoff < _pathSign * (start.x - dockingPt)
 			; backoff += _wheel_base) {
-			goal.x = dockingPt + _pathSign * _wheel_base;
+			goal.x = dockingPt + _pathSign * backoff;
 #if 1
-			ok = Dubins(start, goal, segments, path);
+			ROS_INFO("Approaching RSDubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f]"
+					, start.x, start.y, start.theta, start.kappa, goal.x);
+			ok = RSDubins(start, goal, segments, path);
 			if (ok)
 				break;
-			ROS_INFO("No approaching Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f]"
-					, start.x, start.y, start.theta, start.kappa, goal.x);
 #endif
+			ROS_WARN("Approaching RS++ [%.2f, %.2f, %.2f] --> [%.2f]"
+					, start.x, start.y, start.theta, goal.x);
 			ok = RSpmpm(start, goal, segments, path);
 			if (ok)
 				break;
-			ROS_WARN("No approaching RS [%.2f, %.2f, %.2f] --> [%.2f]"
-					, start.x, start.y, start.theta, goal.x);
 		}
 	}
 	if (ok) {
 		_parkingState = ParkingState::approaching;				
-	} else { // distancing
+	} else { // cannot approach; distance
 		start.d = goal.d = 1; // go forward when recovering
 		for (auto backoff = 0.25*_wheel_base
 			; !ok && backoff < 10 * _wheel_base
@@ -528,7 +562,7 @@ bool HcPathNode::heuristic_plan() {
 			goal.y = 0.2 * lateralDir * backoff;
 			goal.theta = //_pathSign > 0 ? 0 : M_PI;
 				_pathSign > 0 ? goal.y : pify(M_PI - goal.y);
-			ROS_WARN("Distancing Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
+			ROS_WARN("Distancing RSDubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
 					, start.x, start.y, start.theta, start.kappa
 					, goal.x, goal.y, goal.theta);
 			ok = Dubins(start, goal, segments, path);
@@ -752,7 +786,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 				ROS_WARN("Kappa error %.2f switching gear to %d"
 						, e, _gear);
 				_prevS = _s; ds = _s - _prevS;
-				_eThetaInt = _eAxialInt = 0; // reset integrated axial error
+				_eAxialInt = 0; // reset integrated axial error
 				_waypointTimeout = now + _waypointDeadline;
 			}
 		}
@@ -788,7 +822,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 					if (S * ctrl.delta_s < 0) { // direction switch
 						ROS_WARN("Switching path control to (%.2f, %.2f); N gear"
 								, ctrl.delta_s, ctrl.kappa);
-						_eThetaInt = _eAxialInt = 0; // reset integral since switching direction
+						_eAxialInt = 0; // reset integral since switching direction
 						_gear = 0;
 					}
 				} else {
@@ -806,7 +840,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 
 			if (_gear * first.d < 0) { 
 				ROS_WARN("Gear in opposite of control; switching gear");
-				_eThetaInt = _eAxialInt = 0; // reset integral since switching direction
+				_eAxialInt = 0; // reset integral since switching direction
 				_gear = first.d;
 				// _gear = 0;
 				// continue;
