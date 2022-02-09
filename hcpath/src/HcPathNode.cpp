@@ -427,7 +427,7 @@ bool HcPathNode::Dubins(State& start, State& goal
 		// If going backward, check collision
 		auto dTheta = axialDir ? point.theta : M_PI - point.theta;
 		if (dist2trailer(point.x, point.y, point.theta, false)
-			< _safe_distance + 0.25*fabs(dTheta)) {
+			< _safe_distance + 0.1*fabs(dTheta)) {
 			return false;
 		}
 	}
@@ -470,7 +470,7 @@ bool HcPathNode::RSDubins(State& start, State& goal
 		}
 		auto dTheta = axialDir ? point.theta : M_PI - point.theta;
 		if (dist2trailer(point.x, point.y, point.theta, false)
-			< _safe_distance + 0.25*fabs(dTheta)) {
+			< _safe_distance + 0.1*fabs(dTheta)) {
 			return false;
 		}
 	}
@@ -491,7 +491,7 @@ bool HcPathNode::RSpmpm(State& start, State& goal
 		// If going backward, check collision
 		auto dTheta = axialDir ? point.theta : M_PI - point.theta;
 		if (dist2trailer(point.x, point.y, point.theta, false)
-			< _safe_distance + 0.25*fabs(dTheta)) {
+			< _safe_distance + 0.1*fabs(dTheta)) {
 			return false;
 		}
 	}
@@ -771,6 +771,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 	static constexpr double kCos30Deg = 0.866;
 	static constexpr double kEpsilon = 0.01  // 1 cm ball
 		, kEpsilonSq = kEpsilon * kEpsilon;
+	double kappa_ff = 0.0;
 	if (_openControlQ.size()) {
 		const auto& ctrl = _openControlQ.front();
 #if 0
@@ -786,7 +787,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 				ROS_WARN("Kappa error %.2f switching gear to %d"
 						, e, _gear);
 				_prevS = _s; ds = _s - _prevS;
-				_eAxialInt = 0; // reset integrated axial error
+				_eThetaInt = _eAxialInt = 0;
 				_waypointTimeout = now + _waypointDeadline;
 			}
 		}
@@ -822,7 +823,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 					if (S * ctrl.delta_s < 0) { // direction switch
 						ROS_WARN("Switching path control to (%.2f, %.2f); N gear"
 								, ctrl.delta_s, ctrl.kappa);
-						_eAxialInt = 0; // reset integral since switching direction
+						_eThetaInt = _eAxialInt = 0;
 						_gear = 0;
 					}
 				} else {
@@ -840,7 +841,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 
 			if (_gear * first.d < 0) { 
 				ROS_WARN("Gear in opposite of control; switching gear");
-				_eAxialInt = 0; // reset integral since switching direction
+				_eThetaInt = _eAxialInt = 0;
 				_gear = first.d;
 				// _gear = 0;
 				// continue;
@@ -864,11 +865,11 @@ void HcPathNode::control(double& throttle, double& curvature) {
 		auto dist1 = sqrt(dist1sq);
 		if (first.d * dist1 * cos1 < kCos30Deg * kPathRes) {
 			// waypoint NOT in front of the car
-			ROS_WARN("(%.2f, %.2f) ds %.2f "
-					"(%.3f m, %.2f rad); Pruning waypoint on side(%.2f, %.2f)"//", %.2f, %.0f"
-					, _trueFootprintPose[0], _trueFootprintPose[1]//, _2Dpose.T[0], _2Dpose.T[1]
-					, ds, first.d * dist1, theta_e
-					, first.x, first.y // , first.theta, first.d
+			ROS_WARN("(%.2f, %.2f) ds %.2f "//"(%.3f m, %.2f rad);"
+					"Pruning waypoint on side(%.2f, %.2f, %.2f)"//", %.2f, %.0f"
+					, _trueFootprintPose[0], _trueFootprintPose[1], ds//, _2Dpose.T[0], _2Dpose.T[1]
+					// , first.d * dist1, theta_e
+					, first.x, first.y, first.kappa // , first.theta, first.d
 					);
 			_openStateQ.pop_front();
  			_waypointTimeout = now + _waypointDeadline;
@@ -948,9 +949,9 @@ void HcPathNode::control(double& throttle, double& curvature) {
 			+ _Kback_intkappa * _eThetaInt
 			+ (1-2*signbit(_gear)) * (_Kback_theta * eTheta + _Kback_intTheta * _eThetaInt
 									+ _Kback_lateral * eLateral);
-	ROS_DEBUG_THROTTLE(0.25,
-			"throttle %.2f, steer error %.2f,%.2f,%.2f => %.2f+%.2f"
-			, throttle, eKappa, eTheta, eLateral
+	ROS_INFO_THROTTLE(0.25,
+			"throttle %.2f, steer error %.2f,%.2f,%.2f,%.2f => %.2f+%.2f"
+			, throttle, eKappa, eTheta, _eThetaInt, eLateral
 			, curvature, kappa_fb);
 	curvature += kappa_fb;
 	_eThetaInt = clamp(_eThetaInt + eTheta, -kMaxSteer, kMaxSteer);
