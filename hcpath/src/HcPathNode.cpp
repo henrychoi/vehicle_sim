@@ -512,8 +512,9 @@ bool HcPathNode::heuristic_plan() {
 		, .d = -1 // backing up by default
 	};
 	auto dockingPt = _pathSign > 0
-		? _xform2kingpin.transform.translation.x - _xform2fifth.transform.translation.x
-		: _xform2hitch.transform.translation.x   + _xform2fifth.transform.translation.x;
+		? _xform2kingpin.transform.translation.x //- _xform2fifth.transform.translation.x
+		: _xform2hitch.transform.translation.x   //+ _xform2fifth.transform.translation.x
+		;
 	State goal = { .x = dockingPt, .y = 0, 
 		.theta = M_PI * signbit(_pathSign), // 0 or pi
 		.kappa = 0, .d = -1 // this demo just backs up to both kingpin and hitch
@@ -521,22 +522,24 @@ bool HcPathNode::heuristic_plan() {
 
 	if (!inParkingState(ParkingState::approaching)) {// try approach
 		ROS_WARN("Trying to generate approach path");
+
+#if 0
 		if (_pathSign * (start.x - goal.x) > _wheel_base 
 			&& !(ok = RSpmpm(start, goal, segments, path))) {
 			ROS_WARN("No approaching RS [%.2f, %.2f, %.2f] --> [%.2f]"
 					, start.x, start.y, start.theta, goal.x);
 		}
-
-		ok = RSDubins(start, goal, segments, path);
+		ok = Dubins(start, goal, segments, path);
 		if (!ok) {
 			ROS_INFO("No RSDubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f]"
 					, start.x, start.y, start.theta, start.kappa, goal.x);
 		}
+#endif
 		for (auto backoff = 0.5 * _wheel_base
 			; !ok && backoff < _pathSign * (start.x - dockingPt)
 			; backoff += _wheel_base) {
 			goal.x = dockingPt + _pathSign * backoff;
-#if 1
+#if 0
 			ROS_INFO("Approaching RSDubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f]"
 					, start.x, start.y, start.theta, start.kappa, goal.x);
 			ok = RSDubins(start, goal, segments, path);
