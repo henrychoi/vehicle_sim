@@ -13,7 +13,7 @@ path:
      [0.377, -0.255]]
   safe_distance: 0.005 # [m] insist on minimum distance
 
-  kappa_max: 1.48 # [1/m]
+  kappa_max: 1.58 # [1/m]
   sigma_max: 5 # [1/m^2]; want more responsive steering
 
   # Check "Vehicle Teleoperation Weekly Meeting_20210910.pptx"

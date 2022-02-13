@@ -357,10 +357,10 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 	if (_pathSign) { // trying to control the vehicle
 		ROS_INFO_THROTTLE(1, "Driving to %d, error %.2f, %.2f, %.2f"
 				, _pathSign, e_x, e_y, e_t);
-		static constexpr double kEpsilon = 0.03, kEpsilonSq = kEpsilon * kEpsilon;
+		static constexpr double kEpsilon = 0.1, kEpsilonSq = kEpsilon * kEpsilon;
 		if (e_x*e_x < kEpsilonSq && e_y*e_y < kEpsilonSq
-		 	// loose heading requirement when docking to the kingpin
-			&& (_pathSign > 0 || e_t*e_t < kEpsilonSq)) {
+			&& (_pathSign > 0// heading error OK when docking to the kingpin
+				|| e_t*e_t < kEpsilonSq)) {
 			ROS_ERROR("Docked successfully!");
 			_parkingState = ParkingState::idle; _gear = 0;
 			_pathSign = 0;
@@ -512,69 +512,65 @@ bool HcPathNode::heuristic_plan() {
 		, .d = -1 // backing up by default
 	};
 	auto dockingPt = _pathSign > 0
-		? _xform2kingpin.transform.translation.x //- _xform2fifth.transform.translation.x
-		: _xform2hitch.transform.translation.x   //+ _xform2fifth.transform.translation.x
+		? _xform2kingpin.transform.translation.x - _xform2fifth.transform.translation.x
+		: _xform2hitch.transform.translation.x   + _xform2fifth.transform.translation.x
 		;
 	State goal = { .x = dockingPt, .y = 0, 
 		.theta = M_PI * signbit(_pathSign), // 0 or pi
 		.kappa = 0, .d = -1 // this demo just backs up to both kingpin and hitch
 	};
 
-	if (!inParkingState(ParkingState::approaching)) {// try approach
-		ROS_WARN("Trying to generate approach path");
+	// approach cone is +/- 15 deg from the docking point
+	// AOA: angle of aproach
+	auto aoa = atan(start.y / (start.x - dockingPt));
+	static constexpr double kTan15deg = 0.26795;
 
-#if 0
-		if (_pathSign * (start.x - goal.x) > _wheel_base 
-			&& !(ok = RSpmpm(start, goal, segments, path))) {
-			ROS_WARN("No approaching RS [%.2f, %.2f, %.2f] --> [%.2f]"
-					, start.x, start.y, start.theta, goal.x);
+	while (fabs(aoa) < kTan15deg) {// try approach
+		ROS_WARN("AOA = %.2f, so trying to approach", aoa);
+		if (ok = Dubins(start, goal, segments, path)) {
+			break;
 		}
-		ok = Dubins(start, goal, segments, path);
-		if (!ok) {
-			ROS_INFO("No RSDubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f]"
-					, start.x, start.y, start.theta, start.kappa, goal.x);
+		ROS_INFO("No Dubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f]"
+				, start.x, start.y, start.theta, start.kappa, goal.x);
+
+		if (ok = RSpmpm(start, goal, segments, path)) {
+			break;
 		}
-#endif
-		for (auto backoff = 0.5 * _wheel_base
-			; !ok && backoff < _pathSign * (start.x - dockingPt)
-			; backoff += _wheel_base) {
-			goal.x = dockingPt + _pathSign * backoff;
-#if 0
-			ROS_INFO("Approaching RSDubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f]"
-					, start.x, start.y, start.theta, start.kappa, goal.x);
-			ok = RSDubins(start, goal, segments, path);
-			if (ok)
-				break;
-#endif
-			ROS_WARN("Approaching RS++ [%.2f, %.2f, %.2f] --> [%.2f]"
-					, start.x, start.y, start.theta, goal.x);
-			ok = RSpmpm(start, goal, segments, path);
-			if (ok)
-				break;
-		}
+		ROS_WARN("No approaching RS [%.2f, %.2f, %.2f] --> [%.2f]"
+				, start.x, start.y, start.theta, goal.x);
+		break;
 	}
 	if (ok) {
 		_parkingState = ParkingState::approaching;				
-	} else { // cannot approach; distance
+	} else { // cannot approach; so move away first
 		start.d = goal.d = 1; // go forward when recovering
-		for (auto backoff = 0.25*_wheel_base
+		for (auto backoff = 0.5 * _wheel_base
 			; !ok && backoff < 10 * _wheel_base
-			; backoff += _wheel_base) {
+			; backoff += 0.25 * _wheel_base) {
 			goal.kappa = 0;//(1 - signbit(goal.y)) * _kappa_max;
 			goal.x = start.x + _pathSign * backoff;
-			goal.y = 0.2 * lateralDir * backoff;
-			goal.theta = //_pathSign > 0 ? 0 : M_PI;
-				_pathSign > 0 ? goal.y : pify(M_PI - goal.y);
-			ROS_WARN("Distancing RSDubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
+			goal.y = 0;//kTan15deg * lateralDir * backoff; // remain on the same side
+			goal.theta = _pathSign > 0 ? 0 : M_PI;
+						// _pathSign > 0 ? goal.y : pify(M_PI - goal.y);
+			if (ok = RSDubins(start, goal, segments, path)) {
+				break;
+			}
+			ROS_WARN("No distancing RSDubins [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
 					, start.x, start.y, start.theta, start.kappa
 					, goal.x, goal.y, goal.theta);
-			ok = Dubins(start, goal, segments, path);
+
+			if (ok = RSpmpm(start, goal, segments, path)) {
+				break;
+			}
+			ROS_WARN("No distancing RS++ [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
+					, start.x, start.y, start.theta, start.kappa
+					, goal.x, goal.y, goal.theta);
+
 		}
-		if (ok) {
-			// don't drive too far away
+		if (ok) { // don't drive too far away just to straighten out the heading
 			auto i=0;
 			for (const auto& state: path) {
-				if (_pathSign * (state.x - start.x) > 10 * _wheel_base) {
+				if (_pathSign * (state.x - start.x) > 5 * _wheel_base) {
 					break;
 				}
 				++i;
