@@ -71,14 +71,14 @@
     </model>
 
     <gui>
-      <camera name="chase_cam">
+      <!--camera name="chase_cam">
         <track_visual>
           <name>trailer</name>
           <static>true</static>
           <use_model_frame>true</use_model_frame>
           <xyz>0 0 -2.5</xyz>
         </track_visual>
-      </camera>
+      </camera-->
     </gui>
 
     <joint name="trailer_joint" type="fixed">
@@ -120,7 +120,7 @@
         <child>kingpin</child>
       </joint>
       <link name='kingpin'>
-        <pose>0.27 0 -.22  0 0 0</pose>
+        <pose>0.27 0 -.215  0 0 0</pose>
         <inertial>
           <mass>0.005</mass>
           <inertia>

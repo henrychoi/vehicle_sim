@@ -655,7 +655,7 @@ void Maruco::onMonoFrame(const sensor_msgs::ImageConstPtr& msg) {
 			if (_prevMonoPosition[0]) {
 #if 1
 				auto dx = T.x - _prevMonoPosition[0], dy = T.y - _prevMonoPosition[1];
-				if (dx*dx + dy*dy > (0.3*0.3)*_wheel_base * _wheel_base) {
+				if (dx*dx + dy*dy > (0.5*0.5)*_wheel_base * _wheel_base) {
 					ROS_ERROR("mono estimate outlier delta = (%.2f, %.2f)"
 							, dx, dy);
 					return;

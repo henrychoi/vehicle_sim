@@ -5,6 +5,7 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /RobotModel1/Links1
+        - /TF1/Frames1
         - /Polygon1
         - /MarkerArray1
       Splitter Ratio: 0.5
@@ -138,6 +139,11 @@ Visualization Manager:
           Show Axes: false
           Show Trail: false
           Value: true
+        bumper_link:
+          Alpha: 1
+          Show Axes: false
+          Show Trail: false
+          Value: true
         quad0_link:
           Alpha: 1
           Show Axes: false
@@ -248,6 +254,8 @@ Visualization Manager:
           Value: false
         base_link:
           Value: false
+        bumper_link:
+          Value: false
         hitch_center:
           Value: false
         kingpin:
@@ -308,6 +316,8 @@ Visualization Manager:
           base_R_fender:
             {}
           base_link:
+            bumper_link:
+              {}
             quad_link:
               quad0_link:
                 quad0_optical_link:
@@ -492,4 +502,4 @@ Window Geometry:
     collapsed: true
   Width: 1587
   X: 2253
-  Y: 569
+  Y: 532

@@ -19,7 +19,7 @@
 
   <!-- spawn the truck at a desired X and Y -->
   <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model"
-    args="-param robot_description -urdf -model autoware_gazebo -x .7 -y -.5 -Y -0.7"/>
+    args="-param robot_description -urdf -model autoware_gazebo -x .3 -y -0 -Y -0"/>
 
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
 
@@ -74,6 +74,10 @@
   <node name="throttle_gazebo" pkg="topic_tools" type="throttle"
     args="messages /gazebo/link_states 5 /truth/link_states" />
 
+  <!-- Down sample the contact sensor output to 5 Hz because it is a flood-->
+  <node name="throttle_contact" pkg="topic_tools" type="throttle"
+    args="messages /contact_5wheel 5 /contact/5wheel" />
+  
   <!-- Compare pose estimate against the Gazebo generated ground truth -->
   <!-- node name="perf" pkg="perf" type="perf" required="true" output="screen"/-->
 
