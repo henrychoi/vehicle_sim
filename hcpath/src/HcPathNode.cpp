@@ -367,7 +367,8 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 			}	break;
 			case DockingPhase::final: {
 				static constexpr double kEpsilon = 0.01, kEpsilonSq = kEpsilon * kEpsilon;
-				if (e_x*e_x < kEpsilonSq && e_y*e_y < kEpsilonSq
+				if (e_x*e_x < 4*kEpsilonSq // be more tolerant of the axial error
+					&& e_y*e_y < kEpsilonSq// than the lateral error
 					&& (_pathSign > 0 || // heading error OK when docking to the kingpin
 						e_t*e_t < kEpsilonSq)) {
 					_gear = 0;
@@ -378,6 +379,7 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 					ROS_ERROR("Stopped with large error (%.2f, %.2f, %.2f); trying again"
 							, e_x, e_y, e_t);
 					if (pre_plan()) {
+						_dockingPhase = DockingPhase::pre;
 						_gear = 0; // put into N to get going
 					} else { // give up
 						_dockingPhase = DockingPhase::idle;
@@ -520,7 +522,7 @@ bool HcPathNode::pre_plan() {
 	vector<State> path;
 	vector<Control> segments;
 
-	auto dockingPt = _pathSign * 1.0;
+	auto dockingPt = _pathSign * 0.9;
 	auto lateralDir = 1 - 2*signbit(_2Dpose.T[1]); // am I on the L(+) or R(-) side of trailer?
 	State start = { // path planner pose is always relative to the trailer
 		.x = _2Dpose.T[0], .y = _2Dpose.T[1], .theta = _2Dpose.yaw
@@ -616,7 +618,8 @@ bool HcPathNode::pre_plan() {
 
 bool HcPathNode::final_plan() {
 	auto dockingPt = _pathSign > 0
-		? _xform2kingpin.transform.translation.x - _xform2fifth.transform.translation.x
+		// when docking to the kingpin, go a little farther
+		? _xform2kingpin.transform.translation.x - _xform2fifth.transform.translation.x - kPathRes
 		: _xform2hitch.transform.translation.x   + _xform2fifth.transform.translation.x
 		;
 	_openControlQ.clear();
@@ -642,6 +645,7 @@ bool HcPathNode::final_plan() {
 		.x = dockingPt, .y = 0, .theta = M_PI * signbit(_pathSign), .kappa = 0, .d = -1
 	});
 	_dockingX = dockingPt;
+	ROS_ERROR("Beginning final docking to %.2f", dockingPt);
 
 	nav_msgs::Path nav_path;
 	nav_path.header.frame_id = "trailer";
