@@ -6,6 +6,7 @@
   <xacro:include filename="$(find camera_description)/urdf/quad_camera.xacro"/>
   <xacro:include filename="$(find camera_description)/urdf/monocular_camera.xacro"/>
   <xacro:include filename="$(find imu_description)/urdf/imu.xacro"/>
+  <xacro:include filename="$(find bumper_description)/urdf/bumper.xacro"/>
 
   <xacro:arg name="gpu" default="false"/>
 
@@ -73,5 +74,7 @@
       pitch="${calibration['base_link2camera']['pitch']}"
       yaw="${calibration['base_link2camera']['yaw']}"
       fps="15" width="1640" height="1232" fov="2.16"/>
+      
+   <xacro:bumper_macro parent="base_footprint" />    
 
 </robot>
