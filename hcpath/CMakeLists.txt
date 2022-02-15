@@ -10,6 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
 	)
 #find_package(Boost REQUIRED COMPONENTS system)
 find_package(Eigen3 REQUIRED)
+find_package(gazebo REQUIRED)
 
 add_message_files(FILES PathState.msg PathState.msg GaussianPathState.msg)
 #add_service_files(FILES path_srv.srv)
@@ -24,7 +25,7 @@ generate_messages(DEPENDENCIES std_msgs actionlib_msgs)
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
 	CATKIN_DEPENDS roscpp std_msgs message_runtime actionlib_msgs gazebo_msgs
-  	DEPENDS EIGEN3
+  	DEPENDS EIGEN3 gazebo_ros
   )
 catkin_package(DEPENDS Boost)
 
@@ -39,10 +40,10 @@ add_executable(hcpath src/HcPathNode.cpp src/cute_c2.cpp
 	src/ccpm0_dubins_state_space.cpp src/ccpmpm_dubins_state_space.cpp
 	)
 target_link_libraries(hcpath ${catkin_LIBRARIES}
-# 	${Boost_INCLUDE_DIRS}
+# 	${Boost_INCLUDE_DIRS} ${GAZEBO_LIBRARY_DIRS}
 )
 
-include_directories(include ${catkin_INCLUDE_DIRS} ${Boost_INCLUDE_DIRS})
+include_directories(include ${catkin_INCLUDE_DIRS} ${Boost_INCLUDE_DIRS} ${GAZEBO_INCLUDE_DIRS})
 
 install(TARGETS hcpath
 	ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
@@ -55,3 +56,4 @@ install(DIRECTORY config
 )
 
 add_dependencies(hcpath ${hcpath_EXPORTED_TARGETS})
+
