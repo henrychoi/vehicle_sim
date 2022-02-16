@@ -482,23 +482,25 @@ void Maruco::onQuadFrame(const sensor_msgs::ImageConstPtr& msg) {
 			auto T = quad2marker.pose.position;
 
 			if (_prevQuadPosition[0]) {
+#if 1
 				auto dx = T.x - _prevQuadPosition[0], dy = T.y - _prevQuadPosition[1];
-				if (dx*dx + dy*dy > _wheel_base * _wheel_base
+				if (dx*dx + dy*dy > (0.3*0.3) * _wheel_base * _wheel_base
 					&& msg->header.stamp - _marker2QuadTime < _markObsDeadlne) {
 					ROS_WARN_THROTTLE(1, "Quad estimate outlier; dropping estimate");
 					return;
 				}
+#endif
+#if 1
+				if (msg->header.stamp - _marker2MonoTime <= _markObsDeadlne) {
+					ROS_INFO_THROTTLE(2,
+						"mono estimate is current; skipping backup localization estimate");
+					return;
+				}
+#endif
 			}
 			_marker2QuadTime = quad2marker.header.stamp;
 			_prevQuadPosition[0] = T.x; _prevQuadPosition[1] = T.y;
 
-#if 1
-			if (msg->header.stamp - _marker2MonoTime <= _markObsDeadlne) {
-				ROS_DEBUG_THROTTLE(1,
-					"mono estimate is current; skipping backup localization estimate");
-				return;
-			}
-#endif
 			geometry_msgs::TransformStamped xf;
 			xf.header = quad2marker.header;
 			// Assume the vehicle ONLY yaws
@@ -653,7 +655,7 @@ void Maruco::onMonoFrame(const sensor_msgs::ImageConstPtr& msg) {
 			if (_prevMonoPosition[0]) {
 #if 1
 				auto dx = T.x - _prevMonoPosition[0], dy = T.y - _prevMonoPosition[1];
-				if (dx*dx + dy*dy > (0.5*0.5)*_wheel_base * _wheel_base) {
+				if (dx*dx + dy*dy > (0.3*0.3)*_wheel_base * _wheel_base) {
 					ROS_ERROR("mono estimate outlier delta = (%.2f, %.2f)"
 							, dx, dy);
 					return;
