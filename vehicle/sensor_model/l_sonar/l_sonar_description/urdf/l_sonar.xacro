@@ -1,0 +1,76 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro">
+<!-- <xacro:property name="pi" value="3.1415926835897931" /> -->
+  <xacro:macro name="l_sonar_macro" params="parent">
+   
+    <joint name="l_sonar_joint" type="fixed">
+      <parent link="${parent}"/> 
+      <origin rpy="0 3.141593 0" xyz="-0.066 0.14 0.08"/>
+      <child  link="l_sonar_link"/>
+    </joint>  
+    <link name="l_sonar_link">
+      <inertial>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <mass value="0.01"/>
+        <inertia ixx="0.001" ixy="0.0" ixz="0.0" 
+                 iyy="0.001" iyz="0.0" 
+                 izz="0.001"/>
+      </inertial>
+      <visual>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.015 0.0425 0.020"/>
+        </geometry>
+        <material name="black">
+            <color rgba="${25/255} ${25/255} ${25/255} .9"/>
+        </material>
+      </visual>
+      <!-- <collision>
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <box size="0.015 0.0425 0.020"/>
+        </geometry>
+      </collision> -->
+    </link>
+
+    <gazebo reference="l_sonar_link">
+     <material>Gazebo/Black</material>
+      <sensor type="ray" name="l_sonar">
+          <pose>0 0 0 0 0 0</pose>
+          <update_rate>5</update_rate>
+          <ray>
+            <scan>
+              <horizontal>
+                <samples>5</samples>
+                <resolution>1.0</resolution>
+                <min_angle>-0.262</min_angle>
+                <max_angle>0.262</max_angle>  // 15deg 
+              </horizontal>
+              <vertical>
+                <samples>5</samples>
+                <resolution>1</resolution>
+                <min_angle>-0.262</min_angle>
+                <max_angle>0.262</max_angle>
+              </vertical>
+            </scan>
+            <range>
+              <min>0.02</min>
+              <max>0.50</max>
+              <resolution>0.003</resolution>
+            </range>
+          </ray>
+          <plugin filename="libgazebo_ros_range.so" name="gazebo_ros_range">
+            <gaussianNoise>0.005</gaussianNoise>
+            <alwaysOn>true</alwaysOn>
+            <updateRate>5</updateRate>
+            <topicName>l_sonar</topicName>
+            <frameName>l_sonar_link</frameName>
+            <fov>0.524</fov>
+            <radiation>ultrasound</radiation>
+          </plugin>
+        </sensor>
+       </gazebo>
+  </xacro:macro> 
+</robot>
+      
+   

@@ -7,6 +7,8 @@
   <xacro:include filename="$(find camera_description)/urdf/monocular_camera.xacro"/>
   <xacro:include filename="$(find imu_description)/urdf/imu.xacro"/>
   <xacro:include filename="$(find bumper_description)/urdf/bumper.xacro"/>
+  <xacro:include filename="$(find l_sonar_description)/urdf/l_sonar.xacro"/>
+  <xacro:include filename="$(find r_sonar_description)/urdf/r_sonar.xacro"/>
 
   <xacro:arg name="gpu" default="false"/>
 
@@ -76,5 +78,6 @@
       fps="15" width="1640" height="1232" fov="2.16"/>
       
    <xacro:bumper_macro parent="base_footprint" />    
-
+   <xacro:l_sonar_macro parent="base_footprint" /> 
+   <xacro:r_sonar_macro parent="base_footprint" /> 
 </robot>
