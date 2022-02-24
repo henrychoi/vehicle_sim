@@ -37,7 +37,7 @@
         <update_Rate>2</update_Rate>
         <always_on>true</always_on> 
         <contact>
-          <collision>base_footprint_fixed_joint_lump__bumper_collision_collision_7</collision>
+          <collision>base_footprint_fixed_joint_lump__bumper_collision_collision_6</collision>
           <topic>/contact_5wheel</topic> 
         </contact>
         <plugin name='bumper_sensor_plugin' filename='libgazebo_ros_bumper.so'>
