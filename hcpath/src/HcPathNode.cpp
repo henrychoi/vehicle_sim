@@ -73,8 +73,10 @@ class HcPathNode {
 	}
 
 	ros::Subscriber bumper_sub_;
-	void onContact(const gazebo_msgs::ContactState &cs);
-
+	void onContact(const gazebo_msgs::ContactState::ConstPtr &cs) {
+		auto x = cs->total_wrench.force.x;
+		ROS_WARN("Contact detected force %.2f", x);
+	}
 	ros::Subscriber gazebo_sub_;
 
 	// ros::ServiceServer server_;
@@ -175,7 +177,7 @@ HcPathNode::HcPathNode()
 , joint_sub_(_nh.subscribe("/autoware_gazebo/joint_states", 1, &Self::onJointState, this))
 , joy_sub_(_nh.subscribe<sensor_msgs::Joy>("/dbw/joy", 10, &Self::onJoy, this))
 , gazebo_sub_(_nh.subscribe("/truth/link_states", 1, &Self::onGazeboLinkStates, this))
-, bumper_sub_(_nh.subscribe("/contact/5wheel", 1, &Self::onContact, this))
+, bumper_sub_(_nh.subscribe("/contact_5wheel", 1, &Self::onContact, this))
 // , server_(_nh.advertiseService("plan", &Self::onPathRequest, this))
 , _tfWatchdogPeriod(0.4)
 , as_(_nh, "/path" //, boost::bind(&Self::onRequest, this, _1)
@@ -1147,11 +1149,4 @@ void HcPathNode::onGazeboLinkStates(const gazebo_msgs::LinkStates &links) {
 			, _trueFootprintPose[0], _trueFootprintPose[1]
 			// , yaw_gt
 			);
-}
-void HcPathNode::onContact(const gazebo_msgs::ContactState &cs) {
-  int a;
-  a = cs.total_wrench.force.x;
-  if (a==0) {
-	ROS_ERROR_THROTTLE(0.25, "Contact detected");
-  }
 }

@@ -19,7 +19,7 @@
 
   <!-- spawn the truck at a desired X and Y -->
   <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model"
-    args="-param robot_description -urdf -model autoware_gazebo -x .3 -y -0 -Y -0"/>
+    args="-param robot_description -urdf -model autoware_gazebo -x 1.3 -y -.3 -Y -0"/>
 
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
 
