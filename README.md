@@ -28,13 +28,13 @@ $ source "your catkin workspace"/devel/setup.bash
 3. launch gazebo
 
 ```shell
-$ roslaunch vehicle_sim_launcher world_test.launch
+$ roslaunch vehicle_sim_launcher dock2rear.launch
 ```
 
 If GPU is available
 
 ```shell
-$ roslaunch vehicle_sim_launcher world_test.launch gpu:=true
+$ roslaunch vehicle_sim_launcher dock2rear.launch gpu:=true
 ```
 [![](https://img.youtube.com/vi/JViNKB_igI4/0.jpg)](https://www.youtube.com/watch?v=JViNKB_igI4)
 

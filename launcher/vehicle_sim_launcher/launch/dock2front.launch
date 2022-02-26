@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+
+  <arg name="model" default="$(find vehicle_model)/urdf/vehicle.xacro"/>
+  <arg name="ns" default="/autoware_gazebo"/>
+  <arg name="gpu" default="true"/>
+  <param name="robot_description" command="xacro  $(arg model) gpu:=$(arg gpu)" />
+  <arg name="rvizconfig" default="$(find hcpath)/config/path.rviz" />
+
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <env name="GAZEBO_MODEL_PATH" value="$(find gazebo_world_description)"/>
+    <arg name="world_name" default="$(find gazebo_world_description)/worlds/KUEparking2.world"/> 
+    <arg name="paused" value="false"/>
+    <arg name="use_sim_time" value="true"/>
+    <arg name="gui" value="true"/>
+    <arg name="headless" value="false"/>
+    <arg name="debug" value="false"/>
+  </include>
+
+  <!-- spawn the truck at a desired X and Y -->
+  <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model"
+    args="-param robot_description -urdf -model autoware_gazebo -x 1 -y -.3 -Y -0"/>
+
+  <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
+
+  <!--node name="rqt_robot_steering" pkg="rqt_robot_steering" type="rqt_robot_steering" /-->
+
+  <group ns="$(arg ns)">
+    <!-- Load joint controller configurations from YAML file to parameter server -->
+    <rosparam file="$(find vehicle_model)/config/controller.yaml" command="load"/>
+    <!-- load the controllers -->
+    <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false"
+          args="wheel_left_front_velocity_controller wheel_right_front_velocity_controller steering_left_front_position_controller steering_right_front_position_controller joint_state_controller"/>
+    <!-- tf publisher -->
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
+
+    <rosparam file="$(find vehicle_model)/config/vehicle_info.yaml" command="load"/>
+
+    <node name="vehicle_input_subscriber" pkg="vehicle_sim_interface"
+      type="vehicle_input_subscriber" respawn="false">
+      <param name="wheel_base" type="double" value="0.267"/>
+      <param name="wheel_tread" type="double" value="0.242"/>
+      <param name="wheel_radius" type="double" value="0.06"/>
+      <remap from="cmd_vel" to="/dbw/cmd_vel"/>
+    </node>
+
+  </group>
+
+  <node name="maruco" pkg="maruco" type="maruco" required="true" output="screen">
+    <param name="show_axis" type="bool" value="true"/>
+    <param name="wheel_base" type="double" value="0.267"/>
+    <param name="wheel_tread" type="double" value="0.242"/>
+    <param name="wheel_radius" type="double" value="0.06"/>
+  </node>
+
+  <!-- have to add the static transform in THIS direction; the parent
+  link is what the algorithm decides the ARUCO board is at (whether the
+  center or the corner), but the child is the center of the trailer.  Note
+  the ARUCO board is on the -y-z axes plane because of the OpenCV to ROS mapping.
+  See the axes explanation in ArucoNode.cpp.
+  -->
+  <!--node pkg="tf2_ros" type="static_transform_publisher"
+    name="aruco_trailer_broadcaster" 
+    args="-0.375 0.235 0.155  0 0 0 1  aruco trailer"
+    required="true" output="screen"/-->
+  <node pkg="tf2_ros" type="static_transform_publisher"
+    name="trailer_kingpin_broadcaster" args="0.27 0 0  0 0 0 1  trailer kingpin"
+    required="true"/>
+  <node pkg="tf2_ros" type="static_transform_publisher"
+    name="trailer_hitch_broadcaster" args="-0.27 0 0  0 0 0 1  trailer hitch_center"
+    required="true"/>
+
+  <!-- Down sample the Gazebo link_states to 5 Hz because it is a flood-->
+  <node name="throttle_gazebo" pkg="topic_tools" type="throttle"
+    args="messages /gazebo/link_states 5 /truth/link_states" />
+
+  <!-- Down sample the contact sensor output to 5 Hz because it is a flood-->
+  <node name="throttle_contact" pkg="topic_tools" type="throttle"
+    args="messages /contact_5wheel 5 /contact/5wheel" />
+  
+  <!-- Compare pose estimate against the Gazebo generated ground truth -->
+  <!-- node name="perf" pkg="perf" type="perf" required="true" output="screen"/-->
+
+  <!-- Xbox 360 controller input -->
+  <node name="joy_node" pkg="joy" type="joy_node">
+    <param name="deadzone" type="double" value="0.05"/>
+    <!-- Allows deadzone to be smooth -->
+    <param name="default_trig_val" type="bool" value="true"/>
+
+    <!-- param name="autorepeat_rate" value="0"/>
+    <param name="coalesce_interval" value="0.01"/>
+    <param name="sticky_buttons" value="false"/-->
+  </node>
+
+  <!-- /joy is 60~90 Hz; downsample it -->
+  <node name="throttle_joy" pkg="topic_tools" type="throttle"
+    args="messages /joy 12 /dbw/joy" />
+
+  <!-- drive by wire: translate to twist_cmd -->
+  <node name="dbw" pkg="dbw" type="dbw" required="true" output="screen">
+    <param name="steer_axis" type="int" value="0"/>
+    <param name="throttle_axis" type="int" value="1"/>
+    <param name="deadman_btn" type="int" value="4"/> <!-- LR button-->
+    <param name="x_btn" type="int" value="8"/> <!-- the "X" button-->
+    <param name="steer_gain" type="double" value="1.5"/>
+    <param name="throttle_gain" type="double" value="1"/>
+
+    <!-- <remap from="/aruco/tf_strobe" to="/dbw/tf_strobe"/> -->
+  </node>
+
+  <!-- path planning parameter -->
+  <rosparam command="load" file="$(find vehicle_model)/config/path.yaml" />
+  <!-- the path planning server -->
+  <node name="hcpath" pkg="hcpath" type="hcpath" required="true" output="screen">
+    <param name="deadman_btn" type="int" value="4"/> <!-- LR button-->
+    <param name="Kforward_s" type="double" value="10"/>
+    <param name="Kforward_kappa" type="double" value=".2"/>
+    <param name="Kback_axial" type="double" value="20"/>
+    <param name="Kback_intaxial" type="double" value="0.1"/>
+    <param name="Max_intaxial" type="double" value="4"/>
+    <param name="Kback_theta" type="double" value="5"/>
+    <param name="Kback_intTheta" type="double" value="0.00"/>
+    <param name="Kback_kappa" type="double" value="0.5"/>
+    <param name="Kback_intkappa" type="double" value="0.01"/>
+    <param name="Kback_lateral" type="double" value="10"/>
+  </node>
+</launch>
