@@ -35,7 +35,7 @@ using namespace hcpath;
 class HcPathNode {
 	typedef HcPathNode Self;
 
-	int32_t _pathSign = 0; // side hitch (from the back) vs the kingpin (+1)
+	int32_t _pathSign = 0; // kingpin2 (from the back) vs the kingpin (+1)
 	int8_t _gear = 0; // only -1, 0, 1 are valid
 	enum class DockingPhase { idle, pre, final } _dockingPhase = DockingPhase::idle;
 	double _dockingX;
@@ -91,9 +91,9 @@ class HcPathNode {
 	tf2_ros::Buffer tf2_buffer_;
 	tf2_ros::TransformListener tf2_listener_;
 
-	geometry_msgs::TransformStamped _xform2kingpin, _xform2hitch, _xform2fifth;
-	bool _haveXform2kingpin = false, _haveXform2hitch = false, _haveXform2Fifth = false
-		// Assume the transform from base_footprint to side hitch center is the same
+	geometry_msgs::TransformStamped _xform2kingpin, _xform2kingpin2, _xform2fifth;
+	bool _haveXform2kingpin = false, _haveXform2kingpin2 = false, _haveXform2Fifth = false
+		// Assume the transform from base_footprint to kingpin2 is the same
 		// as that to the fifth wheel
 		;  
 	double _eAxialInt = 0, _eThetaInt = 0
@@ -340,13 +340,13 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 			ROS_ERROR("onTfStrobe trailer --> kinpin failed: %s", ex.what());
 		}
 	}
-	if (!_haveXform2hitch) {
+	if (!_haveXform2kingpin2) {
 		try {
-			_xform2hitch = tf2_buffer_.lookupTransform("trailer", "hitch_center"
+			_xform2kingpin2 = tf2_buffer_.lookupTransform("trailer", "kingpin2"
 					, ros::Time(0));
-			_haveXform2hitch = true;
+			_haveXform2kingpin2 = true;
 		} catch (tf2::TransformException &ex) {
-			ROS_ERROR("onTfStrobe trailer --> hitch_center failed: %s", ex.what());
+			ROS_ERROR("onTfStrobe trailer --> kingpin2 failed: %s", ex.what());
 		}
 	}
 	if (!_haveXform2Fifth) {
@@ -477,7 +477,7 @@ void HcPathNode::onGoal() {
 	}
 	_pathSign = as_.acceptNewGoal()->target > 0 ? 1 : -1;// accept the new goal
 	// Get the path from the current base_link pose to the dock target
-	// (0: approach fifth_whl from the front or 1: side hitch from the back)
+	// (0: approach fifth_whl from the front or 1: kingpin2 from the back)
 	ROS_ERROR("onGoal target %d", _pathSign);
 	if (pre_plan()) {
 		_obstacle_pub.publish(_markers);
@@ -599,7 +599,7 @@ bool HcPathNode::pre_plan() {
 	State goal = { .x = dockingPt, .y = 0, 
 		.theta = M_PI * signbit(_pathSign), // 0 or pi
 		.kappa = 0
-		// , .d = -1 // this demo just backs up to both kingpin and hitch
+		// , .d = -1 // this demo just backs up to both kingpin and kingpin2
 	};
 	// approach cone is +/- 15 deg from the docking point
 	// AOA: angle of aproach
@@ -688,8 +688,8 @@ bool HcPathNode::pre_plan() {
 bool HcPathNode::final_plan() {
 	auto dockingPt = _pathSign > 0
 		// when docking to the kingpin, go a little farther
-		? _xform2kingpin.transform.translation.x - _xform2fifth.transform.translation.x - kPathRes
-		: _xform2hitch.transform.translation.x   + _xform2fifth.transform.translation.x
+		? _xform2kingpin.transform.translation.x  - _xform2fifth.transform.translation.x - kPathRes
+		: _xform2kingpin2.transform.translation.x + _xform2fifth.transform.translation.x + kPathRes
 		;
 	_openControlQ.clear();
 	_openControlQ.push_back({

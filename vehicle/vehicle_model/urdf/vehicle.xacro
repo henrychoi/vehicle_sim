@@ -74,7 +74,7 @@
       roll="${calibration['base_link2camera']['roll']}"
       pitch="${calibration['base_link2camera']['pitch']}"
       yaw="${calibration['base_link2camera']['yaw']}"
-      fps="15" width="1920" height="1080" fov="2.16"/>
+      fps="15" width="1280" height="720" fov="2.16"/>
       
    <xacro:bumper_macro parent="base_link" />    
 

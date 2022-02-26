@@ -147,17 +147,32 @@
         </visual>
       </link>
 
-      <joint name="hitch_center_joint" type="fixed">
+      <joint name="kingpin2_joint" type="fixed">
         <parent>trailer</parent>
-        <child>hitch_center</child>
+        <child>kingpin2</child>
       </joint>
-      <link name='hitch_center'>
-        <pose>-0.27 0 -.22  0 0 0</pose>
+      <link name='kingpin2'>
+        <pose>-0.27 0 -.215  0 0 0</pose>
+        <inertial>
+          <mass>0.005</mass>
+          <inertia>
+            <ixx>0.001</ixx><ixy>0.0</ixy><ixz>0.0</ixz>
+              <iyy>0.001</iyy><iyz>0.0</iyz>
+                <izz>0.0001</izz>
+          </inertia>
+        </inertial>
+        <collision name="kingpin2_collision">
+          <geometry>
+            <cylinder><radius>0.005</radius><length>0.03</length></cylinder>
+          </geometry>
+        </collision>
         <visual name="visual">
-          <geometry><box><size>0.01 0.01 0.01</size></box></geometry>
-          <material> <!-- green -->
-            <ambient>.1 1 0 1</ambient>
-            <diffuse>.1 1 0 1</diffuse>
+          <geometry>
+            <cylinder><radius>0.005</radius><length>0.03</length></cylinder>
+          </geometry>
+          <material> <!-- red -->
+            <ambient>1 0 0 1</ambient>
+            <diffuse>1 0 0 1</diffuse>
             <specular>0 0 0 1</specular>
             <emissive>0 0 0 0</emissive>
           </material>
@@ -165,11 +180,11 @@
       </link>
 
       <joint name="Lhitch_joint" type="fixed">
-        <parent>hitch_center</parent>
+        <parent>kingpin2</parent>
         <child>Lhitch</child>
       </joint>
       <link name='Lhitch'>
-        <pose relative_to="hitch_center">0 -.18 0  1.57079 0 0</pose>
+        <pose relative_to="kingpin2">0 -.18 0  1.57079 0 0</pose>
         <inertial>
           <mass>0.005</mass>
           <inertia>
@@ -197,11 +212,11 @@
       </link>
 
       <joint name="Rhitch_joint" type="fixed">
-        <parent>hitch_center</parent>
+        <parent>kingpin2</parent>
         <child>Rhitch</child>
       </joint>
       <link name='Rhitch'>
-        <pose relative_to="hitch_center">0 .18 0  1.57079 0 0</pose>
+        <pose relative_to="kingpin2">0 .18 0  1.57079 0 0</pose>
         <inertial>
           <mass>0.005</mass>
           <inertia>

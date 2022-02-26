@@ -6,7 +6,7 @@
   <xacro:include filename="$(find camera_description)/urdf/quad_camera.xacro"/>
   <xacro:include filename="$(find camera_description)/urdf/monocular_camera.xacro"/>
   <xacro:include filename="$(find imu_description)/urdf/imu.xacro"/>
-  <xacro:include filename="$(find rear_bumper_description)/urdf/rear_bumper.xacro"/>
+  <xacro:include filename="$(find bumper_description)/urdf/bumper.xacro"/>
 
   <xacro:arg name="gpu" default="false"/>
 
@@ -74,7 +74,7 @@
       roll="${calibration['base_link2camera']['roll']}"
       pitch="${calibration['base_link2camera']['pitch']}"
       yaw="${calibration['base_link2camera']['yaw']}"
-      fps="15" width="1920" height="1080" fov="2.16"/>
+      fps="15" width="1280" height="720" fov="2.16"/>
       
    <xacro:bumper_macro parent="base_link" />    
 

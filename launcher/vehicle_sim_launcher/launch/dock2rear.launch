@@ -19,7 +19,7 @@
 
   <!-- spawn the truck at a desired X and Y -->
   <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model"
-    args="-param robot_description -urdf -model autoware_gazebo -x -1 -y -0 -Y 3.1415"/>
+    args="-param robot_description -urdf -model autoware_gazebo -x -.5 -y -0 -Y 3.1415"/>
 
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
 
@@ -67,7 +67,7 @@
     name="trailer_kingpin_broadcaster" args="0.27 0 0  0 0 0 1  trailer kingpin"
     required="true"/>
   <node pkg="tf2_ros" type="static_transform_publisher"
-    name="trailer_hitch_broadcaster" args="-0.27 0 0  0 0 0 1  trailer hitch_center"
+    name="trailer_hitch_broadcaster" args="-0.27 0 0  0 0 0 1  trailer kingpin2"
     required="true"/>
 
   <!-- Down sample the Gazebo link_states to 5 Hz because it is a flood-->
