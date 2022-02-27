@@ -19,7 +19,7 @@
 
   <!-- spawn the truck at a desired X and Y -->
   <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model"
-    args="-param robot_description -urdf -model autoware_gazebo -x -.5 -y -0 -Y 3.1415"/>
+    args="-param robot_description -urdf -model autoware_gazebo -x -1 -y -1 -Y 2"/>
 
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
 
@@ -30,14 +30,14 @@
     <rosparam file="$(find vehicle_model)/config/controller.yaml" command="load"/>
     <!-- load the controllers -->
     <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false"
-          args="wheel_left_front_velocity_controller wheel_right_front_velocity_controller steering_left_front_position_controller steering_right_front_position_controller joint_state_controller"/>
+          args="wheel_left_front_velocity_controller wheel_right_front_velocity_controller wheel_left_rear_velocity_controller wheel_right_rear_velocity_controller steering_left_front_position_controller steering_right_front_position_controller joint_state_controller"/>
     <!-- tf publisher -->
     <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
 
     <rosparam file="$(find vehicle_model)/config/vehicle_info.yaml" command="load"/>
 
     <node name="vehicle_input_subscriber" pkg="vehicle_sim_interface"
-      type="vehicle_input_subscriber" respawn="false">
+      type="vehicle_input_subscriber" required="true" output="screen">
       <param name="wheel_base" type="double" value="0.267"/>
       <param name="wheel_tread" type="double" value="0.242"/>
       <param name="wheel_radius" type="double" value="0.06"/>
@@ -76,7 +76,7 @@
 
   <!-- Down sample the contact sensor output to 5 Hz because it is a flood-->
   <node name="throttle_contact" pkg="topic_tools" type="throttle"
-    args="messages /contact_5wheel 5 /contact/5wheel" />
+    args="messages /contact_5whl 5 /contact/fifth" />
   
   <!-- Compare pose estimate against the Gazebo generated ground truth -->
   <!-- node name="perf" pkg="perf" type="perf" required="true" output="screen"/-->
@@ -100,7 +100,9 @@
   <node name="dbw" pkg="dbw" type="dbw" required="true" output="screen">
     <param name="steer_axis" type="int" value="0"/>
     <param name="throttle_axis" type="int" value="1"/>
+
     <param name="deadman_btn" type="int" value="4"/> <!-- LR button-->
+    <param name="tank_btn" type="int" value="5"/> <!-- RR button-->
     <param name="x_btn" type="int" value="8"/> <!-- the "X" button-->
     <param name="steer_gain" type="double" value="1.5"/>
     <param name="throttle_gain" type="double" value="1"/>

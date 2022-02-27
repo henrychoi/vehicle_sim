@@ -41,4 +41,24 @@
        <mechanismReduction>1</mechanismReduction>
     </actuator>
   </transmission>
+
+  <!-- rear wheel motor -->
+  <transmission name="wheel_left_rear_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="wheel_left_rear_joint">
+      <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="wheel_left_rear_motor">
+       <mechanismReduction>1</mechanismReduction>
+    </actuator>
+  </transmission>
+  <transmission name="wheel_right_rear_trans">
+    <type>transmission_interface/SimpleTransmission</type>
+    <joint name="wheel_right_rear_joint">
+      <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+    </joint>
+    <actuator name="wheel_right_rear_motor">
+       <mechanismReduction>1</mechanismReduction>
+    </actuator>
+  </transmission>
 </robot>

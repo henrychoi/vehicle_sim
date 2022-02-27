@@ -17,7 +17,7 @@
 #include <tf/transform_datatypes.h>
 #include <visualization_msgs/MarkerArray.h>
 #include <gazebo_msgs/LinkStates.h>
-#include "gazebo_msgs/ContactState.h"
+#include "gazebo_msgs/ContactsState.h"
 #include <actionlib/server/simple_action_server.h> 
 // #include <hcpath/path_srv.h>
 #include <hcpath/parkAction.h>
@@ -50,7 +50,7 @@ class HcPathNode {
 	float dist2trailer(float x, float y, float yaw, bool logCollision=false);
     ros::NodeHandle _nh, ph_;
 	ros::Publisher _planned_pub, _silouette_pub, _obstacle_pub //_path_pub
-			, _rw_pub, _lw_pub, _rd_pub, _ld_pub;
+			, _rw_pub, _lw_pub, _rw2_pub, _lw2_pub, _rd_pub, _ld_pub;
 
 	ros::Subscriber tf_strobe_sub_;
 	ros::Duration _tfWatchdogPeriod;
@@ -73,10 +73,16 @@ class HcPathNode {
 	}
 
 	ros::Subscriber bumper_sub_;
-	void onContact(const gazebo_msgs::ContactState::ConstPtr &cs) {
-		auto x = cs->total_wrench.force.x;
-		ROS_WARN("Contact detected force %.2f", x);
+	bool _5whlContact = false;
+	void onContact(const gazebo_msgs::ContactsState::ConstPtr &cs) {
+		if ((_5whlContact = cs->states.size())) {
+			ROS_WARN("We have contact!");
+		}
+
+		// auto x = cs->state[].total_wrench.force.x;
+		// ROS_WARN("Contact detected force %.2f", x);
 	}
+
 	ros::Subscriber gazebo_sub_;
 
 	// ros::ServiceServer server_;
@@ -169,6 +175,10 @@ HcPathNode::HcPathNode()
 		"wheel_right_front_velocity_controller/command", 1, true))
 , _lw_pub(_nh.advertise<std_msgs::Float64>("/autoware_gazebo/"
 		"wheel_left_front_velocity_controller/command", 1, true))
+, _rw2_pub(_nh.advertise<std_msgs::Float64>("/autoware_gazebo/"
+		"wheel_right_rear_velocity_controller/command", 1, true))
+, _lw2_pub(_nh.advertise<std_msgs::Float64>("/autoware_gazebo/"
+		"wheel_left_rear_velocity_controller/command", 1, true))
 , _rd_pub(_nh.advertise<std_msgs::Float64>("/autoware_gazebo/"
 		"steering_right_front_position_controller/command", 1, true))
 , _ld_pub(_nh.advertise<std_msgs::Float64>("/autoware_gazebo/"
@@ -177,7 +187,7 @@ HcPathNode::HcPathNode()
 , joint_sub_(_nh.subscribe("/autoware_gazebo/joint_states", 1, &Self::onJointState, this))
 , joy_sub_(_nh.subscribe<sensor_msgs::Joy>("/dbw/joy", 10, &Self::onJoy, this))
 , gazebo_sub_(_nh.subscribe("/truth/link_states", 1, &Self::onGazeboLinkStates, this))
-, bumper_sub_(_nh.subscribe("/contact_5wheel", 1, &Self::onContact, this))
+, bumper_sub_(_nh.subscribe("/contact/fifth", 1, &Self::onContact, this))
 // , server_(_nh.advertiseService("plan", &Self::onPathRequest, this))
 , _tfWatchdogPeriod(0.4)
 , as_(_nh, "/path" //, boost::bind(&Self::onRequest, this, _1)
@@ -438,8 +448,8 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 				static constexpr double kEpsilon = 0.01, kEpsilonSq = kEpsilon * kEpsilon;
 				if (e_x*e_x < 4*kEpsilonSq // be more tolerant of the axial error
 					&& e_y*e_y < kEpsilonSq// than the lateral error
-					&& (_pathSign > 0 || // heading error OK when docking to the kingpin
-						e_t*e_t < kEpsilonSq)) {
+					// && e_t*e_t < kEpsilonSq
+					) {
 					_gear = 0;
 					ROS_WARN("Arrived at docking point");
 					_pathSign = 0; // successfully docked!
@@ -774,6 +784,7 @@ bool HcPathNode::onPathRequest(hcpath::path_srv::Request &req, hcpath::path_srv:
 
 void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 {
+	// ROS_INFO("onJointState");
 	const auto now = ros::Time::now();
     double dr = 0, dl = 0, wl = 0, wr = 0, sl = 0, sr = 0;
     for (auto i = 0; i < state->name.size(); ++i) {
@@ -843,7 +854,7 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 	// Done with bicycle model; distribute the bicycle model to the L/R wheels
 	curvature = clamp(curvature, -_kappa_max, _kappa_max);
 
-	std_msgs::Float64 r_speed, l_speed, r_delta, l_delta;
+	std_msgs::Float64 r_speed, l_speed, r2_speed, l2_speed, r_delta, l_delta;
     if (fabs(curvature) > 1E-4) {
         auto R = 1.0/curvature
 			// Require R > 2*wheel_tread (= track_width)
@@ -862,6 +873,9 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 	// Implement SW differential
 	l_speed.data = throttle * (1.0 - _wheel_tread * curvature);
 	r_speed.data = throttle * (1.0 + _wheel_tread * curvature);
+    auto c_delta = cos(curvature);
+	l2_speed.data = l_speed.data * c_delta;
+	r2_speed.data = r_speed.data * c_delta;
 
 	if (_manualOverride) {
 		ROS_INFO_THROTTLE(0.5, // "dl %.3g, dr %.3g, sl %.3g, sr %.3g "
@@ -875,6 +889,8 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 				, _gear, throttle, curvature, _curvature);
 		_rw_pub.publish(r_speed);
 		_lw_pub.publish(l_speed);
+		_rw2_pub.publish(r2_speed);
+		_lw2_pub.publish(l2_speed);
 		_rd_pub.publish(r_delta);
 		_ld_pub.publish(l_delta);
 	}

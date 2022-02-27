@@ -38,12 +38,12 @@
         <always_on>true</always_on> 
         <contact>
           <collision>base_footprint_fixed_joint_lump__bumper_collision_collision_6</collision>
-          <topic>/contact_5wheel</topic> 
+          <topic>irrevant_contact_topic</topic> 
         </contact>
         <plugin name='bumper_sensor_plugin' filename='libgazebo_ros_bumper.so'>
           <alwaysOn>true</alwaysOn>
           <updateRate>2</updateRate>
-          <bumperTopicName>/contact_5wheel</bumperTopicName>
+          <bumperTopicName>contact_5whl</bumperTopicName>
           <frameName>base_link</frameName>
         </plugin>
         <!-- <pose frame=''>0 0 0.4075 0 -0 0</pose>  -->

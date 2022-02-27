@@ -30,16 +30,17 @@
     <rosparam file="$(find vehicle_model)/config/controller.yaml" command="load"/>
     <!-- load the controllers -->
     <node name="controller_spawner" pkg="controller_manager" type="spawner" respawn="false"
-          args="wheel_left_front_velocity_controller wheel_right_front_velocity_controller steering_left_front_position_controller steering_right_front_position_controller joint_state_controller"/>
+          args="wheel_left_front_velocity_controller wheel_right_front_velocity_controller wheel_left_rear_velocity_controller wheel_right_rear_velocity_controller steering_left_front_position_controller steering_right_front_position_controller joint_state_controller"/>
     <!-- tf publisher -->
     <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" />
 
     <rosparam file="$(find vehicle_model)/config/vehicle_info.yaml" command="load"/>
 
     <node name="vehicle_input_subscriber" pkg="vehicle_sim_interface"
-      type="vehicle_input_subscriber" respawn="false">
+      type="vehicle_input_subscriber" required="true" output="screen">
       <param name="wheel_base" type="double" value="0.267"/>
       <param name="wheel_tread" type="double" value="0.242"/>
+      <param name="rear_tread" type="double" value="0.15"/>
       <param name="wheel_radius" type="double" value="0.06"/>
       <remap from="cmd_vel" to="/dbw/cmd_vel"/>
     </node>
@@ -75,8 +76,8 @@
     args="messages /gazebo/link_states 5 /truth/link_states" />
 
   <!-- Down sample the contact sensor output to 5 Hz because it is a flood-->
-  <node name="throttle_contact" pkg="topic_tools" type="throttle"
-    args="messages /contact_5wheel 5 /contact/5wheel" />
+  <!--node name="throttle_contact" pkg="topic_tools" type="throttle"
+    args="messages /contact_5wheel 5 /contact/5wheel"/-->
   
   <!-- Compare pose estimate against the Gazebo generated ground truth -->
   <!-- node name="perf" pkg="perf" type="perf" required="true" output="screen"/-->
