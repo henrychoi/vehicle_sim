@@ -485,7 +485,42 @@
         <parent>trailer</parent>
       </joint>
     </model>
-
+    <model name='rear_truck'>
+        <pose>-0.36 0 -0.035 1.570796 0 1.570796</pose>
+       <link name='link'>
+        <visual name='visual'>
+         <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh>
+          <scale>1 1 1</scale>
+          <uri>/home/mo/vehicle_sim/vehicle/vehicle_model/mesh/car_rear_wheel.dae</uri>
+          </mesh> 
+        </geometry>
+       <material name="black">
+            <color rgba="${25/255} ${25/255} ${25/255} .9"/>
+        </material>
+      </visual>
+      </link>
+      <static>1</static>
+    </model>
+    <model name='whl1'>
+        <pose>-0.36 0.15 -0.035 1.570796 0 1.570796</pose>
+       <link name='link1'>
+        <visual name='visual1'>
+         <origin xyz="0 0 0" rpy="0 0 0"/>
+        <geometry>
+          <mesh>
+          <scale>0.15 0.15 0.15</scale>
+          <uri>/home/mo/vehicle_sim/vehicle/vehicle_model/mesh/wheel.dae</uri>
+          </mesh> 
+        </geometry>
+       <material name="black">
+            <color rgba="${25/255} ${25/255} ${25/255} .9"/>
+        </material>
+      </visual>
+      </link>
+      <static>1</static>
+    </model>
     <model name='column1'>
       <pose>12.075 11.45 1.5 0 -0 0</pose>
       <link name='link'>
