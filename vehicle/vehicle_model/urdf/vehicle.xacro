@@ -10,8 +10,6 @@
 
   <xacro:arg name="gpu" default="false"/>
 
-  <xacro:property name="pi" value="3.1415926835897931"/>
-
   <link name="base_footprint"/>
 
   <!-- ================ vehicle ================ -->
@@ -44,9 +42,9 @@
   <xacro:steering_macro suffix="steering_right_front" parent="steering_front_link" x="0" y="${-1*wheel_tread}" yaw="0" length="${wheel_width}"/>
   <xacro:steering_macro suffix="steering_left_front" parent="steering_front_link" x="0" y="${wheel_tread}" yaw="0" length="${wheel_width}"/>
   <!-- wheel -->
-  <xacro:wheel_macro suffix="wheel_right_front" parent="steering_right_front_link" x="0" y="0" yaw="${pi}" radius="${wheel_radius}" width="${wheel_width}"/>
+  <xacro:wheel_macro suffix="wheel_right_front" parent="steering_right_front_link" x="0" y="0" yaw="3.14159" radius="${wheel_radius}" width="${wheel_width}"/>
   <xacro:wheel_macro suffix="wheel_left_front" parent="steering_left_front_link" x="0" y="0" yaw="0" radius="${wheel_radius}" width="${wheel_width}"/>
-  <xacro:wheel_macro suffix="wheel_right_rear" parent="base_link" x="0" y="${-1*wheel_tread/1.6}" yaw="${pi}" radius="${wheel_radius}" width="${wheel_width}"/>
+  <xacro:wheel_macro suffix="wheel_right_rear" parent="base_link" x="0" y="${-1*wheel_tread/1.6}" yaw="3.14159" radius="${wheel_radius}" width="${wheel_width}"/>
   <xacro:wheel_macro suffix="wheel_left_rear" parent="base_link" x="0" y="${wheel_tread/1.6}" yaw="0" radius="${wheel_radius}" width="${wheel_width}"/>
   <!-- actuator -->
  	<xacro:include filename="$(find vehicle_model)/urdf/actuator.xacro"/>

@@ -120,7 +120,7 @@
         <child>kingpin</child>
       </joint>
       <link name='kingpin'>
-        <pose>0.27 0 -.215  0 0 0</pose>
+        <pose>0.30 0 -.215  0 0 0</pose>
         <inertial>
           <mass>0.005</mass>
           <inertia>
@@ -152,7 +152,7 @@
         <child>kingpin2</child>
       </joint>
       <link name='kingpin2'>
-        <pose>-0.27 0 -.215  0 0 0</pose>
+        <pose>-0.30 0 -.215  0 0 0</pose>
         <inertial>
           <mass>0.005</mass>
           <inertia>
@@ -364,7 +364,7 @@
       </link>
       
       <link name="leg1">
-        <pose>0.27 0.23 -0.25 0 0 0</pose>
+        <pose>0.30 0.23 -0.25 0 0 0</pose>
         <inertial>
           <mass>0.25</mass>
           <inertia>
@@ -395,7 +395,7 @@
 
       <link name="leg2">
         <static>false</static>
-        <pose>0.27 -0.23 -0.25 0 0 0</pose>
+        <pose>0.30 -0.23 -0.25 0 0 0</pose>
         <inertial>
           <inertia>
             <ixx>0.083</ixx><ixy>0.0</ixy><ixz>0.0</ixz>
@@ -426,7 +426,7 @@
 
       <link name="leg3">
         <static>false</static>
-        <pose>-0.27 0.23 -0.25 0 0 0</pose>
+        <pose>-0.30 0.23 -0.25 0 0 0</pose>
         <inertial>
           <mass>0.25</mass>
           <inertia>
@@ -456,7 +456,7 @@
       </joint>
 
       <link name="leg4">
-        <pose>-0.27 -0.23 -0.25 0 0 0</pose>
+        <pose>-0.30 -0.23 -0.25 0 0 0</pose>
         <inertial>
           <mass>0.25</mass>
           <inertia>

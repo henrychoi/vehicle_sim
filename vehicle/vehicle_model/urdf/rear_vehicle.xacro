@@ -3,14 +3,11 @@
   <xacro:include filename="$(find vehicle_model)/urdf/rear_body.xacro" />
   <xacro:include filename="$(find vehicle_model)/urdf/wheel.xacro" />
   <xacro:include filename="$(find vehicle_model)/urdf/steering.xacro" />
-  <xacro:include filename="$(find camera_description)/urdf/quad_camera.xacro"/>
   <xacro:include filename="$(find camera_description)/urdf/monocular_camera.xacro"/>
   <xacro:include filename="$(find imu_description)/urdf/imu.xacro"/>
   <xacro:include filename="$(find bumper_description)/urdf/bumper.xacro"/>
 
   <xacro:arg name="gpu" default="false"/>
-
-  <xacro:property name="pi" value="3.1415926835897931"/>
 
   <link name="base_footprint"/>
 
@@ -44,9 +41,9 @@
   <xacro:steering_macro suffix="steering_right_front" parent="steering_front_link" x="0" y="${-1*wheel_tread}" yaw="0" length="${wheel_width}"/>
   <xacro:steering_macro suffix="steering_left_front" parent="steering_front_link" x="0" y="${wheel_tread}" yaw="0" length="${wheel_width}"/>
   <!-- wheel -->
-  <xacro:wheel_macro suffix="wheel_right_front" parent="steering_right_front_link" x="0" y="0" yaw="${pi}" radius="${wheel_radius}" width="${wheel_width}"/>
+  <xacro:wheel_macro suffix="wheel_right_front" parent="steering_right_front_link" x="0" y="0" yaw="3.14159" radius="${wheel_radius}" width="${wheel_width}"/>
   <xacro:wheel_macro suffix="wheel_left_front" parent="steering_left_front_link" x="0" y="0" yaw="0" radius="${wheel_radius}" width="${wheel_width}"/>
-  <xacro:wheel_macro suffix="wheel_right_rear" parent="base_link" x="0" y="${-1*wheel_tread/1.6}" yaw="${pi}" radius="${wheel_radius}" width="${wheel_width}"/>
+  <xacro:wheel_macro suffix="wheel_right_rear" parent="base_link" x="0" y="${-1*wheel_tread/1.6}" yaw="3.14159" radius="${wheel_radius}" width="${wheel_width}"/>
   <xacro:wheel_macro suffix="wheel_left_rear" parent="base_link" x="0" y="${wheel_tread/1.6}" yaw="0" radius="${wheel_radius}" width="${wheel_width}"/>
   <!-- actuator -->
  	<xacro:include filename="$(find vehicle_model)/urdf/actuator.xacro"/>
@@ -55,15 +52,6 @@
 
   <!-- ================ sensor to base_link xforms ================ -->
 	<xacro:property name="calibration" value="${load_yaml('$(find vehicle_model)/config/calibration.yaml')}"/>
-
-  <xacro:quad_camera_macro parent="base_link"
-      x="${calibration['base_link2quad']['x']}"
-      y="${calibration['base_link2quad']['y']}"
-      z="${calibration['base_link2quad']['z']}"
-      roll="${calibration['base_link2quad']['roll']}"
-      pitch="${calibration['base_link2quad']['pitch']}"
-      yaw="${calibration['base_link2quad']['yaw']}"
-      fps="6" width="1280" height="720" fov="1.6"/>
 
   <!--IMX219-160 IR-CUT H: 124 V: 91-->
   <!--cheap webcam H: 87.26 V: 64.96-->
