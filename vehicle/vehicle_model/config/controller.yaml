@@ -21,11 +21,3 @@ wheel_left_front_velocity_controller:
 wheel_right_front_velocity_controller:
   type: velocity_controllers/JointVelocityController
   joint: wheel_right_front_joint
-  
-wheel_left_rear_velocity_controller:
-  type: velocity_controllers/JointVelocityController
-  joint: wheel_left_rear_joint
-
-wheel_right_rear_velocity_controller:
-  type: velocity_controllers/JointVelocityController
-  joint: wheel_right_rear_joint

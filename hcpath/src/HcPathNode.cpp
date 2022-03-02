@@ -37,11 +37,17 @@ class HcPathNode {
 
 	int32_t _dest = 0; // kingpin2 (from the back) vs the kingpin (+1)
 	int8_t _gear = 0; // only -1, 0, 1 are valid
-	enum class DockingPhase { idle, pre, approach, align } _step = DockingPhase::idle;
+	enum class DockingPhase { idle
+		, orient1, approach1, orient2, approach2, orient3,approach3
+	} _step = DockingPhase::idle;
 	State _goal;
 
-	void pre_plan();
-	void approach_plan();
+	void orient1_plan() {};
+	void approach1_plan();
+	void orient2_plan();
+	void approach2_plan();
+	void orient3_plan() {}
+	void approach3_plan();
 	bool Dubins(State& start, State& goal, vector<Control>&, vector<State>&, bool check);
 	bool RSDubins(State& start, State& goal, vector<Control>&, vector<State>&, bool check);
 	bool RSpmpm(State& start, State& goal, vector<Control>&, vector<State>&, bool check);
@@ -49,7 +55,8 @@ class HcPathNode {
 	float dist2trailer(float x, float y, float yaw, bool logCollision=false);
     ros::NodeHandle _nh, ph_;
 	ros::Publisher _planned_pub, _silouette_pub, _obstacle_pub //_path_pub
-			, _rw_pub, _lw_pub, _rw2_pub, _lw2_pub, _rd_pub, _ld_pub;
+			, _rw_pub, _lw_pub //, _rw2_pub, _lw2_pub
+			, _rd_pub, _ld_pub;
 
 	ros::Subscriber tf_strobe_sub_;
 	ros::Duration _tfWatchdogPeriod;
@@ -175,10 +182,10 @@ HcPathNode::HcPathNode()
 		"wheel_right_front_velocity_controller/command", 1, true))
 , _lw_pub(_nh.advertise<std_msgs::Float64>("/autoware_gazebo/"
 		"wheel_left_front_velocity_controller/command", 1, true))
-, _rw2_pub(_nh.advertise<std_msgs::Float64>("/autoware_gazebo/"
-		"wheel_right_rear_velocity_controller/command", 1, true))
-, _lw2_pub(_nh.advertise<std_msgs::Float64>("/autoware_gazebo/"
-		"wheel_left_rear_velocity_controller/command", 1, true))
+// , _rw2_pub(_nh.advertise<std_msgs::Float64>("/autoware_gazebo/"
+// 		"wheel_right_rear_velocity_controller/command", 1, true))
+// , _lw2_pub(_nh.advertise<std_msgs::Float64>("/autoware_gazebo/"
+// 		"wheel_left_rear_velocity_controller/command", 1, true))
 , _rd_pub(_nh.advertise<std_msgs::Float64>("/autoware_gazebo/"
 		"steering_right_front_position_controller/command", 1, true))
 , _ld_pub(_nh.advertise<std_msgs::Float64>("/autoware_gazebo/"
@@ -397,8 +404,7 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 
 	auto x = static_cast<float>(_2Dpose.T[0]), y = static_cast<float>(_2Dpose.T[1]);
 	auto yaw = _2Dpose.yaw;
-	auto e_x = _goal.x - x, e_y = 0. - (double)y
-		, e_t = pify(M_PI * signbit(_dest) - yaw);
+	auto e_x = _goal.x - x, e_y = _goal.y - y, e_t = pify(_goal.theta - yaw);
 
 	{
 		c2x xform;
@@ -419,33 +425,42 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 		ROS_INFO_THROTTLE(0.5, "_dest %d, phase %u, theta %.2f, error %.2f, %.2f, %.2f"
 				, _dest, static_cast<unsigned>(_step), yaw, e_x, e_y, e_t);
 		switch (_step) {
-			case DockingPhase::pre: {
+			case DockingPhase::approach1: {
 				static constexpr double kEpsilon = 0.05, kEpsilonSq = kEpsilon * kEpsilon;
 				if (e_x*e_x < kEpsilonSq && e_y*e_y < kEpsilonSq
 					// heading error OK when docking to the pre-docking point
 					) {
 					_gear = 0;
-					ROS_WARN("Arrived at pre-docking point; planning approach to docking");
-					approach_plan();
+					ROS_WARN("Arrived at approach1 point");
+					orient2_plan();
 				} else if (_gear == -126) { // e-stopped; recover
 					ROS_ERROR("Stopped with large error (%.2f, %.2f, %.2f); trying again"
 							, e_x, e_y, e_t);
 				}
 			}	break;
 
-			case DockingPhase::approach: {
+			case DockingPhase::orient2: {
+				static constexpr double kEpsilon = 0.05, kEpsilonSq = kEpsilon * kEpsilon;
+				if (e_t*e_t < kEpsilonSq) {
+					_gear = 0;
+					ROS_WARN("Orient2 complete");
+					approach2_plan();
+				}
+			}	break;
+
+			case DockingPhase::approach2: {
 				static constexpr double kEpsilon = 0.05, kEpsilonSq = kEpsilon * kEpsilon;
 				if (e_x*e_x < kEpsilonSq && e_y*e_y < kEpsilonSq
 					// heading error OK when approaching
 					) {
 					_gear = 0;
-					ROS_WARN("Arrived at docking point");
+					ROS_WARN("Arrived at approach2 point");
 					_dest = 0; // successfully docked!
 					_step = DockingPhase::idle;
 				} else if (_gear == -126) {
 					ROS_ERROR("Stopped with large error (%.2f, %.2f, %.2f); trying again"
 							, e_x, e_y, e_t);
-					pre_plan();
+					approach2_plan();
 				}
 			}	break;
 			default:
@@ -475,7 +490,7 @@ void HcPathNode::onGoal() {
 	// (1: approach the front from the front or
 	// -1: from the side)
 	ROS_ERROR("onGoal target %d", _dest);
-	pre_plan();
+	approach1_plan();
 }
 
 bool HcPathNode::Dubins(State& start, State& goal
@@ -555,47 +570,29 @@ bool HcPathNode::RSpmpm(State& start, State& goal
 	return true;
 }
 
-void HcPathNode::pre_plan() {
+void HcPathNode::approach1_plan() {
 	vector<State> path;
 	vector<Control> segments;
 
 	State start = { // path planner pose is always relative to the trailer
 		.x = _2Dpose.T[0], .y = _2Dpose.T[1], .theta = _2Dpose.yaw
 		, .kappa = _curvature // the current curvature
-		// , .d = -1 // backing up by default
+		, .d = -1 // backing up by default
 	};
+	_goal.kappa = 0;
+	_goal.d = -1;
 	auto lateralDir = 1 - 2*signbit(_2Dpose.T[1]); // am I on the L(+) or R(-) side of trailer?
 	if (_dest > 0) { // docking to the front
-		_goal.y = 0; _goal.theta = 0; _goal.kappa = 0;
-		for (auto backoff = 0.; backoff < 5 * _wheel_base; backoff += 0.25 * _wheel_base) {
-			_goal.x = kLegHalfBase + backoff;
-			start.d = _goal.d = 1- 2*signbit(_goal.x - start.x);
-			if (RSpmpm(start, _goal, segments, path, true)) {
-				break;
-			}
-			ROS_WARN("No RS++ [%.2f, %.2f, %.2f, %.2f] --> [%.2f, %.2f, %.2f]"
-					, start.x, start.y, start.theta, start.kappa
-					, _goal.x, _goal.y, _goal.theta);
-		}
-#if 1
-		// don't drive too far away just to straighten out the heading
-		auto i=0;
-		for (const auto& state: path) {
-			if (state.x > 5 * _wheel_base) {
-				break;
-			}
-			++i;
-		}
-		path.resize(i); // chop off the states getting us too far away
-#endif
+		_goal.x = kLegHalfBase + _wheel_base;
+		_goal.y = 0; _goal.theta = 0;
 	} else { // docking to the back
-		_goal.x = -0.05;//_xform2kingpin2.transform.translation.x;
-		_goal.y = -lateralDir * 0.05;
-		_goal.theta = lateralDir * M_PI/2;
-		_goal.kappa = 0;//lateralDir * kMaxSteer;
-		start.d = _goal.d = -1;
-		RSpmpm(start, _goal, segments, path, false);
+		_goal.x = 0;//-0.1 * _wheel_base;
+		_goal.y = lateralDir * kLegHalfWidth;
+		auto goal_x = -0.25 * _wheel_base, goal_y = lateralDir * goal_x;
+		_goal.theta = lateralDir * atan((kLegHalfWidth + abs(goal_y)) / abs(goal_x));
 	}
+	RSpmpm(start, _goal, segments, path, false);
+
 	// auto elapsed = ros::Time::now() - t0;
 	// ROS_WARN("Path planning took %u nsec", elapsed.nsec);
 	_openControlQ.clear(); _openStateQ.clear();
@@ -620,52 +617,53 @@ void HcPathNode::pre_plan() {
 	}
 	_planned_pub.publish(nav_path);
 
-	_step = DockingPhase::pre;
+	_step = DockingPhase::approach1;
 	_gear = 0; // put into N to get going
 	// _gear = -128; // if non-recoverable failure
 }
 
-void HcPathNode::approach_plan() {
-	_openControlQ.clear();
-	_openStateQ.clear();
-	_openStateQ.push_back({ // the starting waypoint
+void HcPathNode::orient2_plan() {
+	_goal.kappa = 0;
+	_goal.d = -1;
+	auto lateralDir = 1 - 2*signbit(_2Dpose.T[1]);
+	if (_dest > 0) { // docking to the front
+		_goal.x = kLegHalfBase;
+		_goal.y = 0;
+		_goal.theta = 0;
+	} else { // docking to the back
+		_goal.x = -0.25 * _wheel_base;
+		_goal.y = lateralDir * _goal.x;
+		_goal.theta = lateralDir * atan((kLegHalfWidth + abs(_goal.y)) / abs(_goal.x));
+	}
+	ROS_INFO("orient2 goal: %.2f, %.2f, %.2f", _goal.x, _goal.y, _goal.theta);
+	_step = DockingPhase::orient2;
+	_gear = +2;
+}
+
+void HcPathNode::approach2_plan() {
+	vector<State> path;
+	vector<Control> segments;
+
+	State start = { // path planner pose is always relative to the trailer
 		.x = _2Dpose.T[0], .y = _2Dpose.T[1], .theta = _2Dpose.yaw
 		, .kappa = _curvature // the current curvature
-		, .d = -1 // backing up when approaching
-	});
+		, .d = -1 // backing up by default
+	};
+	// goal was already set in orient2_plan()
+	RSDubins(start, _goal, segments, path, false);
 
-	if (_dest) {
-		_goal.x = _xform2kingpin.transform.translation.x;
-		auto dx = _goal.x - _2Dpose.T[0], dy = _2Dpose.T[1], dist = sqrt(dx*dx + dy*dy);
-		_openControlQ.push_back({ .delta_s = -dist, .kappa = 0, .sigma = 0 });
-		for (auto x = _2Dpose.T[0]; x > _goal.x; x -= kPathRes) {
-			_openStateQ.push_back({ .x = x, .y = 0, .theta = 0, .kappa = 0, .d = -1 });
-		}
-		_openStateQ.push_back({ // the last waypoint
-			.x = _goal.x, .y = 0, .theta = 0, .kappa = 0, .d = -1
-		});
-	} else {
-		_goal.x = _xform2kingpin2.transform.translation.x;
-		auto dx = _goal.x - _2Dpose.T[0], dy = _2Dpose.T[1], dist = sqrt(dx*dx + dy*dy);
-		auto lateralDir = 1 - 2*signbit(_2Dpose.T[1]);// am I on the L(+) or R(-) side of trailer?
-		_openControlQ.push_back({ .delta_s = -dist, .kappa = lateralDir * kMaxSteer
-			, .sigma = 0
-		});
-		for (auto x = _2Dpose.T[0]; x > _goal.x; x -= kPathRes) {
-			_openStateQ.push_back({
-				.x = x, .y = 0, .theta = 0, .kappa = lateralDir * kMaxSteer, .d = -1
-			});
-		}
-		_openStateQ.push_back({ // the last waypoint
-			.x = _goal.x, .y = 0, .theta = 0, .kappa = lateralDir * kMaxSteer, .d = -1
-		});
+	// auto elapsed = ros::Time::now() - t0;
+	// ROS_WARN("Path planning took %u nsec", elapsed.nsec);
+	_openControlQ.clear(); _openStateQ.clear();
+	for (auto seg: segments) {
+		ROS_INFO("control segment %.2f, %.2f, %.2f", seg.delta_s, seg.kappa, seg.sigma);
+		_openControlQ.push_back(seg);
 	}
-
-	ROS_WARN("Beginning approach to %.2f", _goal.x);
+	_eThetaInt = _eAxialInt = 0;
 
 	nav_msgs::Path nav_path;
 	nav_path.header.frame_id = "trailer";
-	for (const auto& state: _openStateQ) {
+	for (const auto& state: path) {
 		geometry_msgs::PoseStamped pose;
 		pose.pose.position.x = state.x;
 		pose.pose.position.y = state.y;
@@ -674,11 +672,13 @@ void HcPathNode::approach_plan() {
 		nav_path.poses.push_back(pose);
 		ROS_INFO("waypoint %.0f, %.2f, %.2f, %.2f, %.2f"
 				, state.d, state.x, state.y, state.theta, state.kappa);
+		_openStateQ.push_back(state);
 	}
 	_planned_pub.publish(nav_path);
 
+	_step = DockingPhase::approach2;
 	_gear = 0; // put into N to get going
-	_step = DockingPhase::approach;
+	// _gear = -128; // if non-recoverable failure
 }
 
 void HcPathNode::onPreempt(){
@@ -760,6 +760,8 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 		_openControlQ.clear(); _openStateQ.clear();
 		_gear = -127; // ESTOP
 	}
+
+	std_msgs::Float64 r_speed, l_speed, r2_speed, l2_speed, r_delta, l_delta;
 	switch(_gear) {
 		case -128: throttle = 0; break;// fatal
 		case -127: {//E-stopping
@@ -773,7 +775,6 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 		case -126:
 			throttle = 0;
 			break;// Need a new path; tell the path planner and wait
-
 		case -1: // reverse => approaching the trailer
 			if (_dist2Trailer < _safe_distance) {
 				ROS_ERROR_THROTTLE(1, "Unsafe distance %.3f @(%.2f, %.2f; %.2f)"
@@ -788,12 +789,29 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 		default: // forward or neutral
 			control(throttle, curvature);
 			break;
+		case +2: { // tank turn control: just turn toward _goal.theta
+			auto el = -kMaxSteer - dl, er = kMaxSteer - dr;
+			static constexpr double kEpsilonSq = 0.02*0.02;
+	        if (el*el < kEpsilonSq && er*er < kEpsilonSq) {
+ 				auto steer = _Kforward_s * (_goal.theta - _2Dpose.yaw);
+				steer = clamp(steer, -kMaxThrottle, +kMaxThrottle);
+ 				l_speed.data = l2_speed.data = -steer;
+				r_speed.data = r2_speed.data =  steer;
+				_rw_pub.publish(r_speed);
+				_lw_pub.publish(l_speed);
+				// _rw2_pub.publish(r2_speed); // rear wheel
+				// _lw2_pub.publish(l2_speed);
+			}
+			l_delta.data = -kMaxSteer;
+			r_delta.data =  kMaxSteer;
+			_rd_pub.publish(r_delta);
+			_ld_pub.publish(l_delta);
+		}	return;
 	} // end switch(_gear)
 
 	// Done with bicycle model; distribute the bicycle model to the L/R wheels
 	curvature = clamp(curvature, -_kappa_max, _kappa_max);
 
-	std_msgs::Float64 r_speed, l_speed, r2_speed, l2_speed, r_delta, l_delta;
     if (fabs(curvature) > 1E-4) {
         auto R = 1.0/curvature
 			// Require R > 2*wheel_tread (= track_width)
@@ -828,8 +846,8 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 				, _gear, throttle, curvature, _curvature);
 		_rw_pub.publish(r_speed);
 		_lw_pub.publish(l_speed);
-		_rw2_pub.publish(r2_speed); // rear wheel
-		_lw2_pub.publish(l2_speed);
+		// _rw2_pub.publish(r2_speed); // rear wheel
+		// _lw2_pub.publish(l2_speed);
 		_rd_pub.publish(r_delta);
 		_ld_pub.publish(l_delta);
 	}

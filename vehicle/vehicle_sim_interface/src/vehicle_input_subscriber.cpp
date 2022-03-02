@@ -12,7 +12,8 @@ class VehicleInputSubscriber
     ros::NodeHandle _nh;
     ros::NodeHandle pnh_;
 
-    ros::Publisher _rw_pub, _lw_pub, _rw2_pub, _lw2_pub, _rd_pub, _ld_pub;
+    ros::Publisher _rw_pub, _lw_pub //, _rw2_pub, _lw2_pub
+                , _rd_pub, _ld_pub;
 
     ros::Subscriber twist_sub_;
     void twistCallback(const geometry_msgs::Twist::ConstPtr &input_twist_msg);
@@ -45,8 +46,8 @@ VehicleInputSubscriber::VehicleInputSubscriber() : _nh(""), pnh_("~")
 // can't figure out why this subscription doesn't fire
 , _rw_pub(_nh.advertise<std_msgs::Float64>("wheel_right_front_velocity_controller/command", 1, true))
 , _lw_pub(_nh.advertise<std_msgs::Float64>("wheel_left_front_velocity_controller/command", 1, true))
-, _rw2_pub(_nh.advertise<std_msgs::Float64>("wheel_right_rear_velocity_controller/command", 1, true))
-, _lw2_pub(_nh.advertise<std_msgs::Float64>("wheel_left_rear_velocity_controller/command", 1, true))
+// , _rw2_pub(_nh.advertise<std_msgs::Float64>("wheel_right_rear_velocity_controller/command", 1, true))
+// , _lw2_pub(_nh.advertise<std_msgs::Float64>("wheel_left_rear_velocity_controller/command", 1, true))
 , _rd_pub(_nh.advertise<std_msgs::Float64>("steering_right_front_position_controller/command", 1, true))
 , _ld_pub(_nh.advertise<std_msgs::Float64>("steering_left_front_position_controller/command", 1, true))
 , twist_sub_(_nh.subscribe("cmd_vel", 1, &Self::twistCallback, this))
@@ -84,9 +85,9 @@ void VehicleInputSubscriber::twistCallback(const geometry_msgs::Twist::ConstPtr 
     if (tankMode) {
         l_delta.data = -kMaxSteer;
         r_delta.data =  kMaxSteer;
-        auto dl = _dl + kMaxSteer, dr = _dr - kMaxSteer;
+        auto el = -kMaxSteer - _dl, er = kMaxSteer - _dr;
         static constexpr double kEpsilonSq = 0.02*0.02;
-        if (dl*dl < kEpsilonSq && dr*dr < kEpsilonSq) {
+        if (el*el < kEpsilonSq && er*er < kEpsilonSq) {
             l_speed.data = l2_speed.data = -steer;
             r_speed.data = r2_speed.data =  steer;
         }
@@ -111,8 +112,8 @@ void VehicleInputSubscriber::twistCallback(const geometry_msgs::Twist::ConstPtr 
     // ROS_INFO("manual drive %.2f, %.2f", l_delta.data, l_speed.data);
     _rw_pub.publish(r_speed);
     _lw_pub.publish(l_speed);
-    _rw2_pub.publish(r2_speed);
-    _lw2_pub.publish(l2_speed);
+    // _rw2_pub.publish(r2_speed);
+    // _lw2_pub.publish(l2_speed);
     _rd_pub.publish(r_delta);
     _ld_pub.publish(l_delta);
 }
