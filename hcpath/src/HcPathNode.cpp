@@ -46,7 +46,7 @@ class HcPathNode {
 	void approach1_plan();
 	void orient2_plan();
 	void approach2_plan();
-	void orient3_plan() {}
+	void orient3_plan();
 	void approach3_plan();
 	bool Dubins(State& start, State& goal, vector<Control>&, vector<State>&, bool check);
 	bool RSDubins(State& start, State& goal, vector<Control>&, vector<State>&, bool check);
@@ -321,7 +321,8 @@ float HcPathNode::dist2trailer(float x, float y, float yaw, bool logCollision) {
 						, &_chassisFrontPoly, C2_TYPE_POLY, &xform
 						, NULL, NULL, true, NULL, &_gjkCacheF[l]);
 		if (distF <= 0) { // collision!
-			ROS_DEBUG("front collision against leg %u at yaw %.2f", l, yaw);
+			if (logCollision)
+				ROS_INFO("front collision against leg %u at yaw %.2f", l, yaw);
 		} else {
 			ROS_DEBUG("front distance %.2f to leg %u at yaw %.2f", distF, l, yaw);
 		}
@@ -442,7 +443,7 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 			case DockingPhase::orient2: {
 				static constexpr double kEpsilon = 0.05, kEpsilonSq = kEpsilon * kEpsilon;
 				if (e_t*e_t < kEpsilonSq) {
-					_gear = 0;
+					// _gear = 0;
 					ROS_WARN("Orient2 complete");
 					approach2_plan();
 				}
@@ -455,14 +456,39 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 					) {
 					_gear = 0;
 					ROS_WARN("Arrived at approach2 point");
-					_dest = 0; // successfully docked!
-					_step = DockingPhase::idle;
+					orient3_plan();
 				} else if (_gear == -126) {
 					ROS_ERROR("Stopped with large error (%.2f, %.2f, %.2f); trying again"
 							, e_x, e_y, e_t);
 					approach2_plan();
 				}
 			}	break;
+
+			case DockingPhase::orient3: {
+				static constexpr double kEpsilon = 0.05, kEpsilonSq = kEpsilon * kEpsilon;
+				if (e_t*e_t < kEpsilonSq) {
+					// _gear = 0;
+					ROS_WARN("Orient3 complete");
+					approach3_plan();
+				}
+			}	break;
+
+			case DockingPhase::approach3: {
+				static constexpr double kEpsilon = 0.01, kEpsilonSq = kEpsilon * kEpsilon;
+				if (e_x*e_x < kEpsilonSq && e_y*e_y < kEpsilonSq
+					// heading error OK when approaching
+					) {
+					_gear = 0;
+					ROS_WARN("Arrived at approach3 point");
+					_dest = 0; // successfully docked!
+					_step = DockingPhase::idle;
+				} else if (_gear == -126) {
+					ROS_ERROR("Stopped with large error (%.2f, %.2f, %.2f); trying again"
+							, e_x, e_y, e_t);
+					approach3_plan();
+				}
+			}	break;
+
 			default:
 				ROS_ERROR_THROTTLE(1, "Unrecoverable docking failure");
 				return;
@@ -537,6 +563,8 @@ bool HcPathNode::RSDubins(State& start, State& goal
 		// ROS_INFO("waypoint d %.2f", point.d);
 		path.push_back(point);
 	}
+	path.pop_back(); // try to prune the overshoot caused by RS portion
+	path.pop_back();
 
 	// A valid path should be less than the Manhattan distance
 	auto manhattan = fabs(goal.x - start.x) + fabs(goal.y - start.y);	if (len > 1.1 * manhattan) {
@@ -589,7 +617,8 @@ void HcPathNode::approach1_plan() {
 		_goal.x = 0;//-0.1 * _wheel_base;
 		_goal.y = lateralDir * kLegHalfWidth;
 		auto goal_x = -0.25 * _wheel_base, goal_y = lateralDir * goal_x;
-		_goal.theta = lateralDir * atan((kLegHalfWidth + abs(goal_y)) / abs(goal_x));
+		_goal.theta = lateralDir * M_PI/2;
+					// * atan((kLegHalfWidth + abs(goal_y)) / abs(goal_x));
 	}
 	RSpmpm(start, _goal, segments, path, false);
 
@@ -631,13 +660,14 @@ void HcPathNode::orient2_plan() {
 		_goal.y = 0;
 		_goal.theta = 0;
 	} else { // docking to the back
-		_goal.x = -0.25 * _wheel_base;
-		_goal.y = lateralDir * _goal.x;
-		_goal.theta = lateralDir * atan((kLegHalfWidth + abs(_goal.y)) / abs(_goal.x));
+		_goal.x = -0.3 * _wheel_base;
+		_goal.y = lateralDir * 0.1 * _wheel_base;
+		_goal.theta = lateralDir * M_PI/2;
+					// * atan((kLegHalfWidth + abs(_goal.y)) / abs(_goal.x));
 	}
 	ROS_INFO("orient2 goal: %.2f, %.2f, %.2f", _goal.x, _goal.y, _goal.theta);
 	_step = DockingPhase::orient2;
-	_gear = +2;
+	_gear = +2; // tank turn
 }
 
 void HcPathNode::approach2_plan() {
@@ -649,8 +679,9 @@ void HcPathNode::approach2_plan() {
 		, .kappa = _curvature // the current curvature
 		, .d = -1 // backing up by default
 	};
-	// goal was already set in orient2_plan()
-	RSDubins(start, _goal, segments, path, false);
+	auto lateralDir = 1 - 2*signbit(_2Dpose.T[1]);
+	_goal.theta = lateralDir * atan((kLegHalfWidth + abs(_goal.y)) / abs(_goal.x));
+	RSpmpm(start, _goal, segments, path, false);
 
 	// auto elapsed = ros::Time::now() - t0;
 	// ROS_WARN("Path planning took %u nsec", elapsed.nsec);
@@ -680,6 +711,61 @@ void HcPathNode::approach2_plan() {
 	_gear = 0; // put into N to get going
 	// _gear = -128; // if non-recoverable failure
 }
+
+void HcPathNode::orient3_plan() {
+	_goal.kappa = 0;
+	_goal.d = -1;
+	auto lateralDir = 1 - 2*signbit(_2Dpose.T[1]);
+	_goal.x = _dest > 0 ? _xform2kingpin.transform.translation.x
+			: _xform2kingpin2.transform.translation.x;
+	_goal.x -= _xform2fifth.transform.translation.x;
+	_goal.y = 0;
+	_goal.theta = 0;
+	ROS_INFO("orient3 goal: %.2f, %.2f, %.2f", _goal.x, _goal.y, _goal.theta);
+	_step = DockingPhase::orient3;
+	_gear = +2; // tank turn
+}
+
+void HcPathNode::approach3_plan() {
+	vector<State> path;
+	vector<Control> segments;
+
+	State start = { // path planner pose is always relative to the trailer
+		.x = _2Dpose.T[0], .y = _2Dpose.T[1], .theta = _2Dpose.yaw
+		, .kappa = _curvature // the current curvature
+		, .d = -1 // backing up by default
+	};
+	RSDubins(start, _goal, segments, path, false);
+
+	// auto elapsed = ros::Time::now() - t0;
+	// ROS_WARN("Path planning took %u nsec", elapsed.nsec);
+	_openControlQ.clear(); _openStateQ.clear();
+	for (auto seg: segments) {
+		ROS_INFO("control segment %.2f, %.2f, %.2f", seg.delta_s, seg.kappa, seg.sigma);
+		_openControlQ.push_back(seg);
+	}
+	_eThetaInt = _eAxialInt = 0;
+
+	nav_msgs::Path nav_path;
+	nav_path.header.frame_id = "trailer";
+	for (const auto& state: path) {
+		geometry_msgs::PoseStamped pose;
+		pose.pose.position.x = state.x;
+		pose.pose.position.y = state.y;
+		pose.pose.orientation.z = sin(0.5 * state.theta);
+		pose.pose.orientation.w = cos(0.5 * state.theta);
+		nav_path.poses.push_back(pose);
+		ROS_INFO("waypoint %.0f, %.2f, %.2f, %.2f, %.2f"
+				, state.d, state.x, state.y, state.theta, state.kappa);
+		_openStateQ.push_back(state);
+	}
+	_planned_pub.publish(nav_path);
+
+	_step = DockingPhase::approach3;
+	_gear = 0; // put into N to get going
+	// _gear = -128; // if non-recoverable failure
+}
+
 
 void HcPathNode::onPreempt(){
 	ROS_WARN("Preempted!");
