@@ -661,7 +661,7 @@ void HcPathNode::orient2_plan() {
 		_goal.theta = 0;
 	} else { // docking to the back
 		_goal.x = -0.3 * _wheel_base;
-		_goal.y = lateralDir * 0.1 * _wheel_base;
+		_goal.y = 0;//-0.1 * lateralDir * _wheel_tread;
 		_goal.theta = lateralDir * M_PI/2;
 					// * atan((kLegHalfWidth + abs(_goal.y)) / abs(_goal.x));
 	}
@@ -719,7 +719,7 @@ void HcPathNode::orient3_plan() {
 	_goal.x = _dest > 0 ? _xform2kingpin.transform.translation.x
 			: _xform2kingpin2.transform.translation.x;
 	_goal.x -= _xform2fifth.transform.translation.x;
-	_goal.y = 0;
+	_goal.y = 0;//0.2 * lateralDir * _wheel_tread;
 	_goal.theta = 0;
 	ROS_INFO("orient3 goal: %.2f, %.2f, %.2f", _goal.x, _goal.y, _goal.theta);
 	_step = DockingPhase::orient3;

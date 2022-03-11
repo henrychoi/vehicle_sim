@@ -1,10 +1,10 @@
 # Upward facing camera, during docking
 base_link2camera:
-  x: -0.062
-  y: 0
-  z: 0.078
+  x: 0.1
+  y: 0.10
+  z: 0.08
   roll: 0.0
-  pitch: -1.309
+  pitch: -0.523
   yaw: 3.14159
 base_link2imu:
   x: 0.0
