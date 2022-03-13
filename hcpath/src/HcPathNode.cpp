@@ -38,7 +38,7 @@ class HcPathNode {
 	int32_t _dest = 0; // kingpin2 (from the back) vs the kingpin (+1)
 	int8_t _gear = 0; // only -1, 0, 1 are valid
 	enum class DockingPhase { idle
-		, orient1, approach1, orient2, approach2, orient3,approach3
+		, orient1, approach1, orient2, approach2, orient3, approach3, orient4
 	} _step = DockingPhase::idle;
 	State _goal;
 
@@ -48,6 +48,7 @@ class HcPathNode {
 	void approach2_plan();
 	void orient3_plan();
 	void approach3_plan();
+	void orient4_plan();
 	bool Dubins(State& start, State& goal, vector<Control>&, vector<State>&, bool check);
 	bool RSDubins(State& start, State& goal, vector<Control>&, vector<State>&, bool check);
 	bool RSpmpm(State& start, State& goal, vector<Control>&, vector<State>&, bool check);
@@ -64,7 +65,7 @@ class HcPathNode {
 	void onTfStrobe(const std_msgs::Header::ConstPtr&);
 
     ros::Subscriber joint_sub_;
-    static constexpr double kMaxThrottle = 2.0
+    double _maxThrottle = 2.0
 		, kMaxSteer = 0.59; // wheel sometimes flies off to origin at 0.6 
 	void onJointState(const sensor_msgs::JointState::ConstPtr &state);
 	void control(double& throttle, double& curvature);
@@ -83,7 +84,7 @@ class HcPathNode {
 	bool _5whlContact = false;
 	void onContact(const gazebo_msgs::ContactsState::ConstPtr &cs) {
 		if ((_5whlContact = cs->states.size())) {
-			ROS_WARN("We have contact!");
+			ROS_WARN_THROTTLE(10, "We have contact!");
 		}
 
 		// auto x = cs->state[].total_wrench.force.x;
@@ -94,8 +95,8 @@ class HcPathNode {
 
 	// ros::ServiceServer server_;
 	actionlib::SimpleActionServer<hcpath::parkAction> as_;
-	parkFeedback feedback_;
-	parkResult result_;
+	parkFeedback _feedback;
+	parkResult _actionResult;
 	// bool onPathRequest(hcpath::path_srv::Request &req, hcpath::path_srv::Response &res);
 	void onPreempt();
 	void onGoal();
@@ -433,9 +434,11 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 					) {
 					_gear = 0;
 					ROS_WARN("Arrived at approach1 point");
+					_feedback.current_number = -1;
+					as_.publishFeedback(_feedback);
 					orient2_plan();
 				} else if (_gear == -126) { // e-stopped; recover
-					ROS_ERROR("Stopped with large error (%.2f, %.2f, %.2f); trying again"
+					ROS_ERROR("Stopped approach1 error (%.2f, %.2f, %.2f); trying again"
 							, e_x, e_y, e_t);
 				}
 			}	break;
@@ -445,6 +448,8 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 				if (e_t*e_t < kEpsilonSq) {
 					// _gear = 0;
 					ROS_WARN("Orient2 complete");
+					_feedback.current_number = -2;
+					as_.publishFeedback(_feedback);
 					approach2_plan();
 				}
 			}	break;
@@ -456,36 +461,52 @@ void HcPathNode::onTfStrobe(const std_msgs::Header::ConstPtr& header) {
 					) {
 					_gear = 0;
 					ROS_WARN("Arrived at approach2 point");
+					_feedback.current_number = -3;
+					as_.publishFeedback(_feedback);
 					orient3_plan();
 				} else if (_gear == -126) {
-					ROS_ERROR("Stopped with large error (%.2f, %.2f, %.2f); trying again"
+					ROS_ERROR("Stopped approach2 error (%.2f, %.2f, %.2f); trying again"
 							, e_x, e_y, e_t);
 					approach2_plan();
 				}
 			}	break;
 
-			case DockingPhase::orient3: {
+			case DockingPhase::orient3: { // turn toward docking point
 				static constexpr double kEpsilon = 0.05, kEpsilonSq = kEpsilon * kEpsilon;
 				if (e_t*e_t < kEpsilonSq) {
 					// _gear = 0;
 					ROS_WARN("Orient3 complete");
+					_feedback.current_number = -4;
+					as_.publishFeedback(_feedback);
 					approach3_plan();
 				}
 			}	break;
 
-			case DockingPhase::approach3: {
+			case DockingPhase::approach3: { // final approach to docking point
 				static constexpr double kEpsilon = 0.01, kEpsilonSq = kEpsilon * kEpsilon;
-				if (e_x*e_x < kEpsilonSq && e_y*e_y < kEpsilonSq
-					// heading error OK when approaching
-					) {
+				if (_5whlContact
+					|| (e_x*e_x < kEpsilonSq && e_y*e_y < kEpsilonSq
+						// heading error OK when approaching
+				)) {
 					_gear = 0;
-					ROS_WARN("Arrived at approach3 point");
-					_dest = 0; // successfully docked!
-					_step = DockingPhase::idle;
+					_feedback.current_number = -5;
+					as_.publishFeedback(_feedback);
+					orient4_plan(); // tank turn to straighten out
 				} else if (_gear == -126) {
-					ROS_ERROR("Stopped with large error (%.2f, %.2f, %.2f); trying again"
+					ROS_ERROR("Stopped approach3 error (%.2f, %.2f, %.2f); trying again"
 							, e_x, e_y, e_t);
 					approach3_plan();
+				}
+			}	break;
+
+			case DockingPhase::orient4: { // align
+				static constexpr double kEpsilon = 0.01, kEpsilonSq = kEpsilon * kEpsilon;
+				if (e_t*e_t < kEpsilonSq) {
+					ROS_WARN("Docked successfully (%.2f, %.2f, %.2f)", x, y, yaw);
+					_dest = 0; // successfully docked!
+					_step = DockingPhase::idle;
+					_actionResult.final_count = -6;
+					as_.setSucceeded(_actionResult);
 				}
 			}	break;
 
@@ -613,10 +634,10 @@ void HcPathNode::approach1_plan() {
 	if (_dest > 0) { // docking to the front
 		_goal.x = kLegHalfBase + _wheel_base;
 		_goal.y = 0; _goal.theta = 0;
-	} else { // docking to the back
+	} else { // docking to the back: go to the middle of the trailer
 		_goal.x = 0;//-0.1 * _wheel_base;
 		_goal.y = lateralDir * kLegHalfWidth;
-		auto goal_x = -0.25 * _wheel_base, goal_y = lateralDir * goal_x;
+		// auto goal_x = -0.25 * _wheel_base, goal_y = lateralDir * goal_x;
 		_goal.theta = lateralDir * M_PI/2;
 					// * atan((kLegHalfWidth + abs(goal_y)) / abs(goal_x));
 	}
@@ -646,6 +667,9 @@ void HcPathNode::approach1_plan() {
 	}
 	_planned_pub.publish(nav_path);
 
+	_feedback.current_number = 1;
+	as_.publishFeedback(_feedback);
+	_maxThrottle = 2.0;
 	_step = DockingPhase::approach1;
 	_gear = 0; // put into N to get going
 	// _gear = -128; // if non-recoverable failure
@@ -661,11 +685,13 @@ void HcPathNode::orient2_plan() {
 		_goal.theta = 0;
 	} else { // docking to the back
 		_goal.x = -0.3 * _wheel_base;
-		_goal.y = 0;//-0.1 * lateralDir * _wheel_tread;
+		_goal.y = lateralDir * -0.05 * _wheel_tread;
 		_goal.theta = lateralDir * M_PI/2;
 					// * atan((kLegHalfWidth + abs(_goal.y)) / abs(_goal.x));
 	}
 	ROS_INFO("orient2 goal: %.2f, %.2f, %.2f", _goal.x, _goal.y, _goal.theta);
+	_feedback.current_number = 2;
+	as_.publishFeedback(_feedback);
 	_step = DockingPhase::orient2;
 	_gear = +2; // tank turn
 }
@@ -707,6 +733,9 @@ void HcPathNode::approach2_plan() {
 	}
 	_planned_pub.publish(nav_path);
 
+	_feedback.current_number = 3;
+	as_.publishFeedback(_feedback);
+	_maxThrottle = 2.0;
 	_step = DockingPhase::approach2;
 	_gear = 0; // put into N to get going
 	// _gear = -128; // if non-recoverable failure
@@ -719,9 +748,11 @@ void HcPathNode::orient3_plan() {
 	_goal.x = _dest > 0 ? _xform2kingpin.transform.translation.x
 			: _xform2kingpin2.transform.translation.x;
 	_goal.x -= _xform2fifth.transform.translation.x;
-	_goal.y = 0;//0.2 * lateralDir * _wheel_tread;
+	_goal.y = 0;
 	_goal.theta = 0;
 	ROS_INFO("orient3 goal: %.2f, %.2f, %.2f", _goal.x, _goal.y, _goal.theta);
+	_feedback.current_number = 4;
+	as_.publishFeedback(_feedback);
 	_step = DockingPhase::orient3;
 	_gear = +2; // tank turn
 }
@@ -730,6 +761,11 @@ void HcPathNode::approach3_plan() {
 	vector<State> path;
 	vector<Control> segments;
 
+	auto lateralDir = 1 - 2*signbit(_2Dpose.T[1]);
+	_goal.x = _dest > 0 ? _xform2kingpin.transform.translation.x
+			: _xform2kingpin2.transform.translation.x;
+	_goal.x -= _xform2fifth.transform.translation.x;
+	_goal.y = 0;//0.1 * lateralDir * _wheel_tread;
 	State start = { // path planner pose is always relative to the trailer
 		.x = _2Dpose.T[0], .y = _2Dpose.T[1], .theta = _2Dpose.yaw
 		, .kappa = _curvature // the current curvature
@@ -761,22 +797,41 @@ void HcPathNode::approach3_plan() {
 	}
 	_planned_pub.publish(nav_path);
 
+	_feedback.current_number = 5;
+	as_.publishFeedback(_feedback);
+	_maxThrottle = 1.5;
 	_step = DockingPhase::approach3;
 	_gear = 0; // put into N to get going
 	// _gear = -128; // if non-recoverable failure
 }
 
+void HcPathNode::orient4_plan() {
+	_goal.kappa = 0;
+	_goal.d = -1;
+	auto lateralDir = 1 - 2*signbit(_2Dpose.T[1]);
+	_goal.x = _dest > 0 ? _xform2kingpin.transform.translation.x
+			: _xform2kingpin2.transform.translation.x;
+	_goal.x -= _xform2fifth.transform.translation.x;
+	_goal.y = 0;
+	_goal.theta = 0;
+	ROS_INFO("orient4 goal: %.2f, %.2f, %.2f", _goal.x, _goal.y, _goal.theta);
+	_feedback.current_number = 6;
+	as_.publishFeedback(_feedback);
+	_maxThrottle = 0.3;
+	_step = DockingPhase::orient4;
+	_gear = +2; // tank turn
+}
 
 void HcPathNode::onPreempt(){
 	ROS_WARN("Preempted!");
-	result_.final_count = 1;
-	as_.setPreempted(result_, "preempted");
+	_feedback.current_number = 1;
+	as_.setPreempted(_actionResult, "preempted");
 }
 
 void HcPathNode::onRequest(const parkGoalConstPtr &req) {
 	int32_t target = req->target;
 	ROS_INFO("onRequest target %d", target);
-	as_.setSucceeded(result_);
+	as_.setSucceeded(_actionResult);
 }
 
 #if 0 // server callback
@@ -880,7 +935,7 @@ void HcPathNode::onJointState(const sensor_msgs::JointState::ConstPtr &state)
 			static constexpr double kEpsilonSq = 0.02*0.02;
 	        if (el*el < kEpsilonSq && er*er < kEpsilonSq) {
  				auto steer = _Kforward_s * (_goal.theta - _2Dpose.yaw);
-				steer = clamp(steer, -kMaxThrottle, +kMaxThrottle);
+				steer = clamp(steer, -_maxThrottle, +_maxThrottle);
  				l_speed.data = l2_speed.data = -steer;
 				r_speed.data = r2_speed.data =  steer;
 				_rw_pub.publish(r_speed);
@@ -1099,7 +1154,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 		eKappa = first.kappa - _curvature;
 		eTheta = pify(first.theta - _2Dpose.yaw);
 		throttle += _Kback_axial * eAxial + _Kback_intaxial * _eAxialInt;
-		_eAxialInt = clamp(_eAxialInt + eAxial, -kMaxThrottle, +kMaxThrottle);
+		_eAxialInt = clamp(_eAxialInt + eAxial, -_maxThrottle, +_maxThrottle);
 		ROS_DEBUG_THROTTLE(0.25, // "(%.2f, %.2f, %.2f) "
 				"gear %d, ds %.2f kappa(%.2f - %.2f), yaw(%.2f - %.2f), e_polar(%.2f, %.2f)"
 				// , _trueFootprintPose[0], _trueFootprintPose[1], _trueFootprintPose[2]
@@ -1147,7 +1202,7 @@ void HcPathNode::control(double& throttle, double& curvature) {
 
 	// I considered using the Cauchy distribution shape to limit the throttle
 	// the curvature curvature error is large, but this is more intuitive
-	auto maxThrottle = kMaxThrottle * min(1., 1./(kMaxSteer*kMaxSteer + fabs(eKappa)));
+	auto maxThrottle = _maxThrottle * min(1., 1./(kMaxSteer*kMaxSteer + fabs(eKappa)));
 	throttle = clamp(throttle, -maxThrottle, maxThrottle);
 
 	if (_openStateQ.size()) { // not done
