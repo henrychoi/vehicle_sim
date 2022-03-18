@@ -19,7 +19,7 @@
 
   <!-- spawn the truck at a desired X and Y -->
   <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model"
-    args="-param robot_description -urdf -model autoware_gazebo -x 1 -y -.5 -Y -0"/>
+    args="-param robot_description -urdf -model autoware_gazebo -x .5 -y -.2 -Y -.5"/>
 
   <node name="rviz" pkg="rviz" type="rviz" args="-d $(arg rvizconfig)" required="true" />
 
@@ -75,9 +75,8 @@
   <node name="throttle_gazebo" pkg="topic_tools" type="throttle"
     args="messages /gazebo/link_states 5 /truth/link_states" />
 
-  <!-- Down sample the contact sensor output to 5 Hz because it is a flood-->
-  <!--node name="throttle_contact" pkg="topic_tools" type="throttle"
-    args="messages /contact_5wheel 5 /contact/5wheel"/-->
+  <node name="throttle_contact" pkg="topic_tools" type="throttle"
+    args="messages /contact_5whl 5 /contact/fifth" />
   
   <!-- Compare pose estimate against the Gazebo generated ground truth -->
   <!-- node name="perf" pkg="perf" type="perf" required="true" output="screen"/-->
@@ -102,6 +101,7 @@
     <param name="steer_axis" type="int" value="0"/>
     <param name="throttle_axis" type="int" value="1"/>
     <param name="deadman_btn" type="int" value="4"/> <!-- LR button-->
+    <param name="tank_btn" type="int" value="5"/> <!-- RR button-->
     <param name="x_btn" type="int" value="8"/> <!-- the "X" button-->
     <param name="steer_gain" type="double" value="1.5"/>
     <param name="throttle_gain" type="double" value="1"/>
@@ -119,10 +119,10 @@
     <param name="Kback_axial" type="double" value="20"/>
     <param name="Kback_intaxial" type="double" value="0.1"/>
     <param name="Max_intaxial" type="double" value="4"/>
-    <param name="Kback_theta" type="double" value="5"/>
+    <param name="Kback_theta" type="double" value="2"/>
     <param name="Kback_intTheta" type="double" value="0.00"/>
-    <param name="Kback_kappa" type="double" value="0.5"/>
+    <param name="Kback_kappa" type="double" value="0.2"/>
     <param name="Kback_intkappa" type="double" value="0.01"/>
-    <param name="Kback_lateral" type="double" value="10"/>
+    <param name="Kback_lateral" type="double" value="3"/>
   </node>
 </launch>
