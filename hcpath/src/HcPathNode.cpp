@@ -631,7 +631,7 @@ void HcPathNode::approach1_plan() {
 	_goal.kappa = 0;
 	_goal.d = -1;
 	auto lateralDir = 1 - 2*signbit(_2Dpose.T[1]); // am I on the L(+) or R(-) side of trailer?
-	if (_dest > 0) { // docking to the front
+	if (_dest > 0) { // docking to the front: slightly in front of the trailer
 		_goal.x = kLegHalfBase + _wheel_base;
 		_goal.y = 0; _goal.theta = 0;
 	} else { // docking to the back: go to the middle of the trailer
@@ -680,10 +680,10 @@ void HcPathNode::orient2_plan() {
 	_goal.d = -1;
 	auto lateralDir = 1 - 2*signbit(_2Dpose.T[1]);
 	if (_dest > 0) { // docking to the front
-		_goal.x = kLegHalfBase;
+		_goal.x = kLegHalfBase;//kingpin is between the 2 front legs
 		_goal.y = 0;
 		_goal.theta = 0;
-	} else { // docking to the back
+	} else { // docking to the back: middle of the trailer, off to the side
 		_goal.x = -0.3 * _wheel_base;
 		_goal.y = lateralDir * -0.05 * _wheel_tread;
 		_goal.theta = lateralDir * M_PI/2;

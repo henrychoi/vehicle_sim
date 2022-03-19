@@ -109,7 +109,7 @@ void DbwNode::onInput(const sensor_msgs::Joy::ConstPtr& input) {
 			x_btn_state = true;
 			//startPathAction();
 			hcpath::parkGoal req;
-			req.target = -1; // dock to the side hitches
+			req.target = +1; // +1: dock to the front, -1: dock to the side hitches
 			ac_.sendGoal(req);
 		}
 	}
