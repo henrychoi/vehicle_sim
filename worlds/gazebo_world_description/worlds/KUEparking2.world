@@ -177,7 +177,7 @@
         <child>Lhitch</child>
       </joint>
       <link name='Lhitch'>
-        <pose relative_to="kingpin2">0 -.18 0  1.57079 0 0</pose>
+        <pose relative_to="kingpin2">0 -.15 0  1.57079 0 0</pose>
         <inertial>
           <mass>0.005</mass>
           <inertia>
@@ -209,7 +209,7 @@
         <child>Rhitch</child>
       </joint>
       <link name='Rhitch'>
-        <pose relative_to="kingpin2">0 .18 0  1.57079 0 0</pose>
+        <pose relative_to="kingpin2">0 .15 0  1.57079 0 0</pose>
         <inertial>
           <mass>0.005</mass>
           <inertia>
@@ -259,66 +259,19 @@
           </inertia>
         </inertial>
         <collision name="collision">
-          <pose>0 0 -0.08  1.570796 0 1.570796</pose>
+          <pose>0 0 -0.10  1.570796 0 1.570796</pose>
           <geometry>
-          <box><size>.26 .05 0.4</size></box>
+          <box><size>.26 .10 0.4</size></box>
           </geometry>
           <surface><friction><ode><mu>100</mu><mu2>50</mu2></ode></friction></surface>
         </collision>
         <visual name="visual">
-          <pose>-.1 0 -0.18  1.570796 0 1.570796</pose>
+          <pose>-.1 -0.01 -0.20  1.570796 0 1.570796</pose>
           <geometry>
-            <!--box><size>.26 .05 0.4</size></box-->
+            <!--box><size>.26 .10 0.4</size></box-->
             <mesh>
               <scale>1 1 1</scale>
-              <uri>/home/henry/catkin_ws/src/vehicle_sim/vehicle/vehicle_model/mesh/car_no_cam.dae</uri>
-            </mesh> 
-          </geometry>
-          <material>
-            <ambient>0.7 0.7 0.7 1</ambient>
-            <diffuse>0.7 0.7 0.7 1</diffuse>
-          </material>
-        </visual>
-      </link>
-
-      <joint name="rear_truck_FL_joint" type="revolute">
-        <parent>rear_truck</parent>
-        <child>rear_truck_FL</child>
-        <axis>
-          <xyz>0 0 1</xyz>
-          <dynamics>
-            <damping>1</damping>
-            <friction>1</friction>
-          </dynamics>
-        </axis>
-      </joint>
-      <link name="rear_truck_FL">
-        <pose relative_to="rear_truck">0.140 0.215 -.1  0 0 0</pose>
-        <inertial>
-          <mass>0.05</mass>
-          <inertia><ixx>.000050104</ixx><ixy>0.0</ixy><ixz>0.0</ixz>
-              <iyy>.00009</iyy><iyz>0.0</iyz>
-                <izz>.000050104</izz>
-          </inertia>
-        </inertial>
-        <collision name="collision">
-          <pose>0 0 0  1.570796 0 0</pose>
-          <geometry>
-            <cylinder><radius>0.06</radius><length>0.035</length></cylinder>
-          </geometry>
-          <surface>
-            <friction>
-              <ode><mu>1.0</mu><mu2>1.0</mu2></ode>
-            </friction>
-          </surface>
-        </collision>
-        <visual name="rear_truck_FL_visual">
-          <pose>0 0.01 0.005  1.570796 0 1.570796</pose>
-          <geometry>
-            <!--cylinder><radius>0.06</radius><length>0.035</length></cylinder-->
-            <mesh>
-              <scale>0.15 0.15 0.15</scale>
-              <uri>/home/henry/catkin_ws/src/vehicle_sim/vehicle/vehicle_model/mesh/wheel.dae</uri>
+              <uri>/home/henry/catkin_ws/src/vehicle_sim/vehicle/vehicle_model/mesh/car_rear_wheel.dae</uri>
             </mesh> 
           </geometry>
           <material>

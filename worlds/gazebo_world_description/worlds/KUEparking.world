@@ -177,7 +177,7 @@
         <child>Lhitch</child>
       </joint>
       <link name='Lhitch'>
-        <pose relative_to="kingpin2">0 -.18 0  1.57079 0 0</pose>
+        <pose relative_to="kingpin2">0 -.15 0  1.57079 0 0</pose>
         <inertial>
           <mass>0.005</mass>
           <inertia>
@@ -209,7 +209,7 @@
         <child>Rhitch</child>
       </joint>
       <link name='Rhitch'>
-        <pose relative_to="kingpin2">0 .18 0  1.57079 0 0</pose>
+        <pose relative_to="kingpin2">0 .15 0  1.57079 0 0</pose>
         <inertial>
           <mass>0.005</mass>
           <inertia>
